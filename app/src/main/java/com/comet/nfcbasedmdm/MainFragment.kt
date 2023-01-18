@@ -1,13 +1,13 @@
 package com.comet.nfcbasedmdm
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.CompoundButton
-import android.widget.CompoundButton.OnCheckedChangeListener
-import android.widget.Switch
 import androidx.fragment.app.Fragment
 import com.comet.nfcbasedmdm.callback.ActivityCallback
 import com.google.android.material.switchmaterial.SwitchMaterial
@@ -15,6 +15,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 class MainFragment : Fragment() {
 
     private var callback : ActivityCallback? = null
+    private lateinit var switch : SwitchMaterial
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -32,10 +33,20 @@ class MainFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_main, container, false)
-        val switch = view.findViewById<SwitchMaterial>(R.id.switch1)
-        switch.setOnCheckedChangeListener { _, isEnabled ->
-            callback?.disableCamera(isEnabled)
-        }
+        switch = view.findViewById(R.id.switch1)
+        val filter = IntentFilter()
+        filter.addAction(NDM_CHANGE)
+        callback?.registerActivityReceiver(NdmReceiver(), filter)
         return view
+    }
+
+    private inner class NdmReceiver : BroadcastReceiver(){
+        override fun onReceive(context: Context?, intent: Intent?) {
+            intent?.let {
+                if (intent.action == NDM_CHANGE)
+                    switch.isChecked = intent.getBooleanExtra("status", false)
+            }
+        }
+
     }
 }

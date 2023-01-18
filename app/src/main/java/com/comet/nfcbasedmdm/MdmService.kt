@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 
 const val LOG_TAG = "NFC_MDM"
 const val CHANNEL_ID = "NFC_MDM_CHANNEL"
+const val NDM_CHANGE = "NDM_CHANGE"
 
 class MdmService : Service() {
 
@@ -50,6 +51,7 @@ class MdmService : Service() {
                         Thread.sleep(10000)
                         disableCamera(!policy.getCameraDisabled(receiver))
                         Log.i(LOG_TAG, "${policy.getCameraDisabled(receiver)}")
+                        sendCameraChange(policy.getCameraDisabled(receiver))
                     } catch (e: InterruptedException) {
                         break
                     }
@@ -80,6 +82,11 @@ class MdmService : Service() {
         }
         val notification = NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_launcher_foreground).setContentText(getString(R.string.channel_content)).build()
         startForeground(1, notification)
+    }
+
+    private fun sendCameraChange(status : Boolean) {
+        val intent = Intent().setAction(NDM_CHANGE).putExtra("status", status)
+        sendBroadcast(intent)
     }
 
 

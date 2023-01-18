@@ -1,16 +1,14 @@
 package com.comet.nfcbasedmdm
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.admin.DevicePolicyManager
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.app.NotificationCompat
 import androidx.fragment.app.Fragment
 import com.comet.nfcbasedmdm.callback.ActivityCallback
 
@@ -45,5 +43,9 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
 
     override fun disableCamera(status: Boolean) {
 
+    }
+
+    override fun registerActivityReceiver(receiver: BroadcastReceiver, filter : IntentFilter) {
+        registerReceiver(receiver, filter)
     }
 }
