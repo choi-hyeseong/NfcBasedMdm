@@ -8,7 +8,9 @@ interface ActivityCallback {
 
     fun switch(frag : Fragment, replace: Boolean)
 
-    fun disableCamera(status : Boolean)
+    fun saveToken(uuid : String, auth : String, delete : String, ip: String)
 
     fun registerActivityReceiver(receiver: BroadcastReceiver, filter: IntentFilter)
+
+    fun runOnMainThread(r : Runnable)
 }
