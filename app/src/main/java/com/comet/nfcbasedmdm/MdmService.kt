@@ -31,23 +31,23 @@ import java.util.concurrent.TimeUnit
 const val LOG_TAG = "NFC_MDM"
 const val CHANNEL_ID = "NFC_MDM_CHANNEL"
 const val NDM_CHANGE = "NDM_CHANGE"
-const val TIMEOUT = 3L
+const val TIMEOUT = 2L
 const val FILE_NAME = "encrypted_file"
 
 class MdmService : Service() {
 
     // 코틀린 람다는 중괄호로 묶고 (x : type, y : type) -> lambda
-    private lateinit var receiver: ComponentName
-    private lateinit var policy: DevicePolicyManager
-    private lateinit var thread: Thread
-    private lateinit var handler: WebSocketHandler
-    private lateinit var encryptKey: String
-    private var mdmData: MDMData? = null
+    private lateinit var receiver : ComponentName
+    private lateinit var policy : DevicePolicyManager
+    private lateinit var thread : Thread
+    private lateinit var handler : WebSocketHandler
+    private lateinit var encryptKey : String
+    private var mdmData : MDMData? = null
 
     /*private val uuid = UUID.fromString("eabf6f0b-0da1-44f0-82d8-b29b33d6e33a") //임시 uuid
     private val auth = "ewvG6EQOYH"
     private val del = "iNb3HREfEm"*/
-    private val mapper: ObjectMapper = ObjectMapper()
+    private val mapper : ObjectMapper = ObjectMapper()
     private val client = OkHttpClient.Builder().connectTimeout(TIMEOUT, TimeUnit.SECONDS)
         .readTimeout(TIMEOUT, TimeUnit.SECONDS).build() //2초 정도로 지정
     private val request : Request by lazy {
@@ -59,7 +59,7 @@ class MdmService : Service() {
     private val binder = LocalBinder()
 
     //암호화된 preference
-    private val preferences: SharedPreferences by lazy {
+    private val preferences : SharedPreferences by lazy {
         val masterKey = MasterKey.Builder(applicationContext, MasterKey.DEFAULT_MASTER_KEY_ALIAS)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
 
@@ -78,12 +78,12 @@ class MdmService : Service() {
 
     inner class LocalBinder : Binder() {
 
-        fun getService(): MdmService {
+        fun getService() : MdmService {
             return this@MdmService //mdm this 접근하기 위해선 inner 사용필수.
         }
     }
 
-    override fun onBind(p0: Intent?): IBinder {
+    override fun onBind(p0 : Intent?) : IBinder {
         //다른 프로세스 접근 고려 X
         return binder
     }
@@ -96,7 +96,7 @@ class MdmService : Service() {
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(1) //notification 취소
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(intent : Intent?, flags : Int, startId : Int) : Int {
         Log.i(LOG_TAG, "SERVICE STARTED")
         policy = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         receiver = ComponentName(packageName, "$packageName.AdminReceiver")
@@ -111,7 +111,8 @@ class MdmService : Service() {
                     if (isMDMRegistered() && isAdminActivated())
                         run()
                     Thread.sleep(10000) //connection 유지
-                } catch (e: InterruptedException) {
+                }
+                catch (e : InterruptedException) {
                     break
                 }
             }
@@ -121,26 +122,26 @@ class MdmService : Service() {
         return START_STICKY //다시 시작, 인텐트 null
     }
 
-    override fun onUnbind(intent: Intent?): Boolean {
+    override fun onUnbind(intent : Intent?) : Boolean {
         return super.onUnbind(intent)
     }
 
-    private fun disableCamera(status: Boolean) {
+    private fun disableCamera(status : Boolean) {
         policy.setCameraDisabled(receiver, status)
     }
 
-    fun isAdminActivated(): Boolean {
+    fun isAdminActivated() : Boolean {
         return policy.isAdminActive(receiver)
     }
 
-    fun getRequestAdminIntent(): Intent {
+    fun getRequestAdminIntent() : Intent {
         return Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).putExtra(
             DevicePolicyManager.EXTRA_DEVICE_ADMIN,
             receiver
         )
     }
 
-    fun isMDMRegistered(): Boolean {
+    fun isMDMRegistered() : Boolean {
         //서버와 연결되어 uuid값이 존재하는가?
         return mdmData != null //초기화가 되지 않은경우 회원가입이 되지 않은것.
         //null이 아닌경우만 활성화 된거지..ㅜㅜㅜㅜㅜ
@@ -153,7 +154,7 @@ class MdmService : Service() {
         }
     }
 
-    fun save(uuid: String, auth: String, delete: String, ip : String) {
+    fun save(uuid : String, auth : String, delete : String, ip : String) {
         preferences.edit().putString("uuid", uuid).putString("auth", auth)
             .putString("delete", delete).putString("ip", ip).apply()
         mdmData = MDMData(UUID.fromString(uuid), delete, auth, ip) //초기화
@@ -171,13 +172,12 @@ class MdmService : Service() {
     }
 
     private fun run() {
-        // TODO 서버 연결, sharedpref 사용하여 상태 유지하기.
         //공개키 얻는 과정
         if (!handler.isOpen) {
             try {
                 val result = client.newCall(keyRequest).execute().body.string()
                 encryptKey = JSONObject(
-                   result
+                    result
                 ).get("data").toString()
 
                 val socket = client.newWebSocket(request, handler)
@@ -186,13 +186,14 @@ class MdmService : Service() {
                     RSAEncrypt(mdmData?.uuid.toString(), encryptKey)
                 ) //handshake
                 socket.send(mapper.writeValueAsString(message))
-            } catch (e: SocketTimeoutException) {
+            }
+            catch (e : SocketTimeoutException) {
                 Log.w(LOG_TAG, "Request encountered timeout. Retry in 10 seconds.")
             }
         }
     }
 
-    fun onMessage(text: String) {
+    fun onMessage(text : String) {
         val message = mapper.readValue(text, WebSocketMessage::class.java) //직렬화 문제잖아..
         val status = message.status
         val data = message.data
@@ -222,8 +223,9 @@ class MdmService : Service() {
                     }
 
                     val auth = split[0]
+                    val time = split[1].toLong()
                     val value = split[2].toBoolean()
-                    if (auth != mdmData?.auth)
+                    if (auth != mdmData?.auth && !checkTimeValid(time))
                         Log.w(LOG_TAG, "invalid request")
                     else {
                         disableCamera(value)
@@ -233,9 +235,9 @@ class MdmService : Service() {
                                 WebSocketMessage(
                                     WebSocketMessage.Status.RESPONSE,
                                     RSAEncrypt(
-                                        auth + "|${StringUtil.generateRandomString(5)}|" + policy.getCameraDisabled(
-                                            receiver
-                                        ), encryptKey
+                                        "$auth|${System.currentTimeMillis()}|${
+                                            policy.getCameraDisabled(receiver)
+                                        }", encryptKey
                                     )
                                 )
                             )
@@ -264,9 +266,14 @@ class MdmService : Service() {
         startForeground(1, notification)
     }
 
-    private fun sendCameraChange(status: Boolean) {
+    private fun sendCameraChange(status : Boolean) {
         val intent = Intent().setAction(NDM_CHANGE).putExtra("status", status)
         sendBroadcast(intent)
+    }
+
+    private fun checkTimeValid(time : Long) : Boolean {
+        // 2초보다 작은 경우 올바른 응답
+        return (System.currentTimeMillis() - time) <= (TIMEOUT * 2000)
     }
 
 
