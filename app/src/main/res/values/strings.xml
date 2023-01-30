@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">NfcBasedMdm</string>
+    <string name="app_name">NDM</string>
     <string name="channel_content">MDM 서비스가 실행중입니다.</string>
     <string name="app_register">NDM Service</string>
     <string name="register_http">http://</string>

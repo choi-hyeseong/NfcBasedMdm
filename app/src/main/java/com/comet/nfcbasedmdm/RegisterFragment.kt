@@ -8,8 +8,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import com.bumptech.glide.Glide
 import com.comet.nfcbasedmdm.callback.ActivityCallback
 import com.comet.nfcbasedmdm.util.EncryptUtil
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -25,7 +27,15 @@ class RegisterFragment : Fragment() {
     private var callback : ActivityCallback? = null
     private val client = OkHttpClient.Builder().connectTimeout(TIMEOUT, TimeUnit.SECONDS)
         .readTimeout(TIMEOUT, TimeUnit.SECONDS).build()
+    private lateinit var imageView : ImageView
     private var isRequested = false
+    set(value) { field = value
+        if (value) //활성화 된경우
+            imageView.visibility = ImageView.VISIBLE
+        else //비활성화 된경우
+            imageView.visibility = ImageView.INVISIBLE
+    }
+    private lateinit var thread : Thread
 
     override fun onAttach(context : Context) {
         super.onAttach(context)
@@ -44,11 +54,13 @@ class RegisterFragment : Fragment() {
     ) : View? {
         val view = inflater.inflate(R.layout.register_layout, container, false)
         val editText = view.findViewById<EditText>(R.id.server)
+        imageView = view.findViewById<ImageView>(R.id.loading)
+        Glide.with(this).load(R.drawable.loading).into(imageView)
         view.findViewById<Button>(R.id.submit).apply {
             setOnClickListener {
                 if (!isRequested) {
                     isRequested = true
-                    Thread {
+                    thread = Thread {
                         try {
                             val mapper = ObjectMapper()
                             val uuid = UUID.randomUUID() //uuid 랜덤 생성
@@ -148,7 +160,7 @@ class RegisterFragment : Fragment() {
                             sendToast(getString(R.string.response_error))
                             isRequested = false
                         }
-                    }.start()
+                    }.also { it.start() }
                 }
                 else
                     callback?.runOnMainThread {
@@ -164,5 +176,11 @@ class RegisterFragment : Fragment() {
         callback?.runOnMainThread {
             Toast.makeText(context, str, Toast.LENGTH_LONG).show()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isRequested)
+            thread.interrupt()
     }
 }
