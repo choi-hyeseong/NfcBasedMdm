@@ -10,7 +10,7 @@ import okhttp3.WebSocketListener
 class WebSocketHandler(private val service : MdmService) : WebSocketListener() {
 
     var isOpen : Boolean = false
-    set(value){ field = value; Log.i(LOG_TAG, "Server Status : $value") } //프로퍼티 변경시 로그
+    set(value){ field = value; Log.i(LOG_TAG, "Server Status : $value"); service.sendServerStatChange(value) } //프로퍼티 변경시 로그
     private lateinit var webSocket : WebSocket
 
     override fun onMessage(webSocket: WebSocket, text: String) {

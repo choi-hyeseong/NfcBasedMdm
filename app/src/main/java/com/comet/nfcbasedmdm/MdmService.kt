@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit
 const val LOG_TAG = "NFC_MDM"
 const val CHANNEL_ID = "NFC_MDM_CHANNEL"
 const val NDM_CHANGE = "NDM_CHANGE"
+const val NDM_SERVER_CHANGE = "NDM_SERVER_CHANGE"
 const val TIMEOUT = 2L
 const val FILE_NAME = "encrypted_file"
 
@@ -171,9 +172,13 @@ class MdmService : Service() {
 
     }
 
+    fun isServerConnected() : Boolean {
+        return handler.isOpen
+    }
+
     private fun run() {
         //공개키 얻는 과정
-        if (!handler.isOpen) {
+        if (!isServerConnected()) {
             try {
                 val result = client.newCall(keyRequest).execute().body.string()
                 encryptKey = JSONObject(
@@ -267,14 +272,18 @@ class MdmService : Service() {
     }
 
     private fun sendCameraChange(status : Boolean) {
-        val intent = Intent().setAction(NDM_CHANGE).putExtra("status", status)
-        sendBroadcast(intent)
+        sendBroadcast(Intent().setAction(NDM_CHANGE).putExtra("status", status))
+    }
+
+    fun sendServerStatChange(status : Boolean) {
+        sendBroadcast(Intent().setAction(NDM_SERVER_CHANGE).putExtra("status", status))
     }
 
     private fun checkTimeValid(time : Long) : Boolean {
         // 2초보다 작은 경우 올바른 응답
         return (System.currentTimeMillis() - time) <= (TIMEOUT * 2000)
     }
+
 
 
 }

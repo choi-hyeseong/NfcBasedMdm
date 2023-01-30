@@ -13,4 +13,6 @@ interface ActivityCallback {
     fun registerActivityReceiver(receiver: BroadcastReceiver, filter: IntentFilter)
 
     fun runOnMainThread(r : Runnable)
+
+    fun getServerStatus() : Boolean
 }
