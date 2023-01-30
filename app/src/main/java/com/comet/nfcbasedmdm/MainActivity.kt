@@ -1,5 +1,6 @@
 package com.comet.nfcbasedmdm
 
+import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Intent
@@ -10,55 +11,67 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import com.comet.nfcbasedmdm.callback.ActivityCallback
+import kotlin.system.exitProcess
 
 class MainActivity : AppCompatActivity(), ActivityCallback {
 
-    private lateinit var service: MdmService
+    private lateinit var service : MdmService
+    private lateinit var result : ActivityResultLauncher<Intent>
     private var isConnected = false
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+
+    override fun onCreate(savedInstanceState : Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         val intent = Intent(this, MdmService::class.java)
         if (!MdmService.isRunning)
             startForegroundService(intent)
         bindService(intent) //서비스 바인딩 (이미 위에서 실행됨)
-        val result =
-            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {} //create 시작시 바로 초기화 해야됨.
-        Handler(Looper.getMainLooper()).postDelayed({
-            if (!service.isAdminActivated()) {
-                val adminIntent = service.getRequestAdminIntent()
-
-                /** TODO 굳이 결과 필요 없으면 startActivity 써도 되지 않을까? -> 나중에 관리자 권한 활성화 여부 체크**/
-                result.launch(adminIntent)
+        result =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                //result == 활성화 이후 작동 + 서비스 연결이후 액티비티 결과 반환
+                if (isConnected && !service.isAdminActivated()) {
+                    Toast.makeText(this, getString(R.string.admin_error_text), Toast.LENGTH_LONG)
+                        .show()
+                    result.launch(service.getRequestAdminIntent())
+                }
             }
-            if (!service.isMDMRegistered())
-                switch(RegisterFragment(), false)
-            else
-                switch(MainFragment(), false)
-        }, 2000L) //서비스 바인딩까지 2초 기다리기.
 
 
     }
 
-    private fun bindService(intent: Intent) {
+    private fun bindService(intent : Intent) {
         bindService(intent, object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            override fun onServiceConnected(name : ComponentName?, service : IBinder?) {
                 this@MainActivity.service = (service as MdmService.LocalBinder).getService()
                 isConnected = true
+                main()
             }
 
-            override fun onServiceDisconnected(name: ComponentName?) {
+            override fun onServiceDisconnected(name : ComponentName?) {
                 isConnected = false
             }
 
         }, BIND_AUTO_CREATE)
     }
 
-    override fun switch(frag: Fragment, replace: Boolean) {
+    private fun main() {
+        if (!service.isAdminActivated()) {
+            val adminIntent = service.getRequestAdminIntent()
+            result.launch(adminIntent)
+        }
+        if (!service.isMDMRegistered())
+            switch(RegisterFragment(), false)
+        else
+            switch(MainFragment(), false)
+    }
+
+    override fun switch(frag : Fragment, replace : Boolean) {
         if (replace)
             supportFragmentManager.beginTransaction().addToBackStack(null).replace(R.id.frame, frag)
                 .commit()
@@ -67,17 +80,17 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
                 .commit()
     }
 
-    override fun saveToken(uuid: String, auth: String, delete: String, ip: String) {
+    override fun saveToken(uuid : String, auth : String, delete : String, ip : String) {
         if (isConnected)
             service.save(uuid, auth, delete, ip)
     }
 
 
-    override fun registerActivityReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
+    override fun registerActivityReceiver(receiver : BroadcastReceiver, filter : IntentFilter) {
         registerReceiver(receiver, filter)
     }
 
-    override fun runOnMainThread(r: Runnable) {
+    override fun runOnMainThread(r : Runnable) {
         runOnUiThread(r)
     }
 }

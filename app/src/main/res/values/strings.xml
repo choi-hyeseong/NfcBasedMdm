@@ -5,4 +5,5 @@
     <string name="register_http">http://</string>
     <string name="wait_response">현재 서버로 요청이 전송중입니다. 잠시후 다시 시도해주세요.</string>
     <string name="response_error">서버와 연결중 오류가 발생했습니다. 로그를 참조해주세요.</string>
+    <string name="admin_error_text">관리자 권한이 허용되어야 정상적인 실행이 가능합니다.</string>
 </resources>
