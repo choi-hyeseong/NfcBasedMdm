@@ -62,10 +62,11 @@ class RegisterFragment : Fragment() {
                     isRequested = true
                     thread = Thread {
                         try {
+                            val ip = editText.text
                             val mapper = ObjectMapper()
                             val uuid = UUID.randomUUID() //uuid 랜덤 생성
                             val encryptKey = mapper.readTree(client.newCall(Request.Builder()
-                                                                                .url(editText.text.toString() + "/encrypt")
+                                                                                .url("$ip/encrypt")
                                                                                 .build()
                             ).execute().body.string()
                             ).get("data").textValue()
@@ -73,7 +74,7 @@ class RegisterFragment : Fragment() {
                                 "id",
                                 EncryptUtil.RSAEncrypt(uuid.toString(), encryptKey)
                             )
-                            val request = Request.Builder().url("${editText.text}/auth")
+                            val request = Request.Builder().url("${ip}/auth")
                                 .header("Content-type", "application/json")
                                 .post(json.toString().toRequestBody()).build()
 
@@ -104,8 +105,7 @@ class RegisterFragment : Fragment() {
                                             uuid.toString(),
                                             decryptAuth,
                                             decryptDelete,
-                                            editText.text.toString()
-                                                .replace("http://", "") //http제거후 추가.
+                                            ip.toString().replace("http://", "") //http제거후 추가.
                                         )
                                         callback?.switch(MainFragment(), false)
                                     }
