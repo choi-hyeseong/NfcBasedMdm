@@ -19,7 +19,6 @@ import com.comet.nfcbasedmdm.model.MDMData
 import com.comet.nfcbasedmdm.model.WebSocketMessage
 import com.comet.nfcbasedmdm.util.EncryptUtil.Companion.AESDecrypt
 import com.comet.nfcbasedmdm.util.EncryptUtil.Companion.RSAEncrypt
-import com.comet.nfcbasedmdm.util.StringUtil
 import com.fasterxml.jackson.databind.ObjectMapper
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -129,6 +128,7 @@ class MdmService : Service() {
 
     private fun disableCamera(status : Boolean) {
         policy.setCameraDisabled(receiver, status)
+        //policy.setUninstallBlocked(receiver, packageName, status) <- profile owner 설정필요
     }
 
     fun isAdminActivated() : Boolean {
@@ -170,6 +170,10 @@ class MdmService : Service() {
         if (!uuid.isNullOrEmpty() && !auth.isNullOrEmpty() && !delete.isNullOrEmpty() && !ip.isNullOrEmpty())
             mdmData = MDMData(UUID.fromString(uuid), delete, auth, ip)
 
+    }
+
+    fun isMDMExecuted() : Boolean {
+        return policy.getCameraDisabled(receiver)
     }
 
     fun isServerConnected() : Boolean {
@@ -241,7 +245,7 @@ class MdmService : Service() {
                                     WebSocketMessage.Status.RESPONSE,
                                     RSAEncrypt(
                                         "$auth|${System.currentTimeMillis()}|${
-                                            policy.getCameraDisabled(receiver)
+                                            isMDMExecuted()
                                         }", encryptKey
                                     )
                                 )

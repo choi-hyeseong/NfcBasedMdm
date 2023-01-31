@@ -54,7 +54,7 @@ class RegisterFragment : Fragment() {
     ) : View? {
         val view = inflater.inflate(R.layout.register_layout, container, false)
         val editText = view.findViewById<EditText>(R.id.server)
-        imageView = view.findViewById<ImageView>(R.id.loading)
+        imageView = view.findViewById(R.id.loading)
         Glide.with(this).load(R.drawable.loading).into(imageView)
         view.findViewById<Button>(R.id.submit).apply {
             setOnClickListener {

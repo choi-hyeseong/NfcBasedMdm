@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.comet.nfcbasedmdm.callback.ActivityCallback
 
@@ -20,6 +21,7 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
     override fun onCreate(savedInstanceState : Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        supportActionBar?.hide() //액션바 숨기기
         val intent = Intent(this, MdmService::class.java)
         if (!MdmService.isRunning)
             startForegroundService(intent)
@@ -88,5 +90,17 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
 
     override fun getServerStatus() : Boolean {
         return service.isServerConnected()
+    }
+
+    override fun getMdmStatus() : Boolean {
+        return service.isMDMExecuted()
+    }
+
+    override fun getContextString(resource : Int) : String {
+        return getString(resource)
+    }
+
+    override fun getContextColor(resource : Int) : Int {
+        return ContextCompat.getColor(this, resource)
     }
 }

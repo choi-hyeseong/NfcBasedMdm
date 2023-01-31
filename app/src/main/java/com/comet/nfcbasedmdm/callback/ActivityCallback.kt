@@ -15,4 +15,10 @@ interface ActivityCallback {
     fun runOnMainThread(r : Runnable)
 
     fun getServerStatus() : Boolean
+
+    fun getMdmStatus() : Boolean
+
+    fun getContextString(resource : Int) : String
+
+    fun getContextColor(resource : Int) : Int
 }
