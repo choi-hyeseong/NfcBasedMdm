@@ -21,4 +21,5 @@ interface ActivityCallback {
     fun getContextString(resource : Int) : String
 
     fun getContextColor(resource : Int) : Int
+
 }

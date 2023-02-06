@@ -1,14 +1,18 @@
 package com.comet.nfcbasedmdm
 
+import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.app.admin.DevicePolicyManager
+import android.app.usage.UsageStats
+import android.app.usage.UsageStatsManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -23,9 +27,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import java.net.SocketTimeoutException
 import java.util.*
 import java.util.concurrent.TimeUnit
+
 
 const val LOG_TAG = "NFC_MDM"
 const val CHANNEL_ID = "NFC_MDM_CHANNEL"
@@ -41,8 +45,8 @@ class MdmService : Service() {
     private lateinit var policy : DevicePolicyManager
     private lateinit var thread : Thread
     private lateinit var handler : WebSocketHandler
-    private lateinit var encryptKey : String
-    private var mdmData : MDMData? = null
+    lateinit var encryptKey : String
+    var mdmData : MDMData? = null
 
     /*private val uuid = UUID.fromString("eabf6f0b-0da1-44f0-82d8-b29b33d6e33a") //임시 uuid
     private val auth = "ewvG6EQOYH"
@@ -108,6 +112,7 @@ class MdmService : Service() {
             while (!Thread.interrupted()) {
                 try {
                     //mdm 서비스가 실행가능한 경우
+                    getTopActivtyFromLolipopOnwards()
                     if (isMDMRegistered() && isAdminActivated())
                         run()
                     Thread.sleep(10000) //connection 유지
@@ -122,11 +127,34 @@ class MdmService : Service() {
         return START_STICKY //다시 시작, 인텐트 null
     }
 
+    fun getTopActivtyFromLolipopOnwards() {
+        val topPackageName : String
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            val mUsageStatsManager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
+            val time = System.currentTimeMillis()
+            // We get usage stats for the last 10 seconds
+            val stats = mUsageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY,
+                                                           time - 1000 * 10,
+                                                           time)
+            // Sort the stats by the last time used
+            if (stats != null) {
+                val mySortedMap : SortedMap<Long, UsageStats> = TreeMap()
+                for (usageStats in stats) {
+                    mySortedMap[usageStats.lastTimeUsed] = usageStats
+                }
+                if (mySortedMap != null && !mySortedMap.isEmpty()) {
+                    topPackageName = mySortedMap[mySortedMap.lastKey()]!!.packageName
+                    Log.e("TopPackage Name", topPackageName)
+                }
+            }
+        }
+    }
     override fun onUnbind(intent : Intent?) : Boolean {
         return super.onUnbind(intent)
     }
 
     private fun disableCamera(status : Boolean) {
+
         policy.setCameraDisabled(receiver, status)
         //policy.setUninstallBlocked(receiver, packageName, status) <- profile owner 설정필요
     }
@@ -196,11 +224,12 @@ class MdmService : Service() {
                 ) //handshake
                 socket.send(mapper.writeValueAsString(message))
             }
-            catch (e : SocketTimeoutException) {
+            catch (e : Exception) {
                 Log.w(LOG_TAG, "Request encountered timeout. Retry in 10 seconds.")
             }
         }
     }
+
 
     fun onMessage(text : String) {
         val message = mapper.readValue(text, WebSocketMessage::class.java) //직렬화 문제잖아..
