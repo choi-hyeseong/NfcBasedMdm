@@ -1,6 +1,9 @@
 package com.comet.nfcbasedmdm
 
+import android.Manifest
+import android.app.AppOpsManager
 import android.content.*
+import android.content.pm.PackageManager
 import android.nfc.NfcAdapter
 import android.nfc.cardemulation.CardEmulation
 import android.os.*
@@ -21,6 +24,7 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
 
     private lateinit var service : MdmService
     private lateinit var result : ActivityResultLauncher<Intent>
+    private lateinit var overlay : ActivityResultLauncher<Intent>
     private var isConnected = false
     private lateinit var messenger : Messenger
 
@@ -43,8 +47,24 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
                     result.launch(service.getRequestAdminIntent())
                 }
             }
+        overlay = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            //사용시간 권한 활성화 체크
+            if (!isUsageEnabled()) {
+                overlay.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+            }
+        }
 
 
+    }
+
+    private fun isUsageEnabled() : Boolean {
+        val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            AppOpsManager.MODE_ALLOWED == appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
+        }
+        else {
+           return true //Q 미만일경우 굳이 할필요 없음.
+        }
     }
 
     private fun setupCard() {
@@ -107,8 +127,9 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
             val adminIntent = service.getRequestAdminIntent()
             result.launch(adminIntent)
         }
-        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-        startActivity(intent)
+        if (!isUsageEnabled())
+            overlay.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+
         if (!service.isMDMRegistered())
             switch(RegisterFragment(), false)
         else

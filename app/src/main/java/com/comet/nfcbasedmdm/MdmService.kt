@@ -1,6 +1,5 @@
 package com.comet.nfcbasedmdm
 
-import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -11,10 +10,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.os.Binder
-import android.os.Build
-import android.os.IBinder
+import android.content.pm.PackageManager.GET_PERMISSIONS
+import android.content.pm.PackageManager.NameNotFoundException
+import android.os.*
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -37,6 +37,7 @@ const val NDM_CHANGE = "NDM_CHANGE"
 const val NDM_SERVER_CHANGE = "NDM_SERVER_CHANGE"
 const val TIMEOUT = 2L
 const val FILE_NAME = "encrypted_file"
+val DENY_PERMISSION = listOf("android.permission.CAMERA", "android.permission.RECORD_AUDIO")
 
 class MdmService : Service() {
 
@@ -45,6 +46,7 @@ class MdmService : Service() {
     private lateinit var policy : DevicePolicyManager
     private lateinit var thread : Thread
     private lateinit var handler : WebSocketHandler
+    private var appThread : Thread? = null //P이상 버젼 전용 쓰레드 변수
     lateinit var encryptKey : String
     var mdmData : MDMData? = null
 
@@ -97,6 +99,8 @@ class MdmService : Service() {
         thread.interrupt() //running 취소
         save()
         isRunning = false
+        appThread?.interrupt() //앱 확인 취소
+        appThread = null
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(1) //notification 취소
     }
 
@@ -112,7 +116,6 @@ class MdmService : Service() {
             while (!Thread.interrupted()) {
                 try {
                     //mdm 서비스가 실행가능한 경우
-                    getTopActivtyFromLolipopOnwards()
                     if (isMDMRegistered() && isAdminActivated())
                         run()
                     Thread.sleep(10000) //connection 유지
@@ -122,40 +125,104 @@ class MdmService : Service() {
                 }
             }
         }.also { it.start() }
+        if (isMDMRegistered() && mdmData?.isEnabled!!)
+            runMDMThread()
         isRunning = true
 
         return START_STICKY //다시 시작, 인텐트 null
     }
 
-    fun getTopActivtyFromLolipopOnwards() {
-        val topPackageName : String
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            val mUsageStatsManager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
-            val time = System.currentTimeMillis()
-            // We get usage stats for the last 10 seconds
-            val stats = mUsageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY,
-                                                           time - 1000 * 10,
-                                                           time)
-            // Sort the stats by the last time used
-            if (stats != null) {
-                val mySortedMap : SortedMap<Long, UsageStats> = TreeMap()
-                for (usageStats in stats) {
-                    mySortedMap[usageStats.lastTimeUsed] = usageStats
-                }
-                if (mySortedMap != null && !mySortedMap.isEmpty()) {
-                    topPackageName = mySortedMap[mySortedMap.lastKey()]!!.packageName
-                    Log.e("TopPackage Name", topPackageName)
-                }
+    @Suppress("DEPRECATION")
+    //api 33이상
+    private fun getPermissions(pack : String) : List<String> {
+        val list = ArrayList<String>()
+        try {
+            val packInfo = packageManager.getPackageInfo(pack, GET_PERMISSIONS)
+            if (packInfo.requestedPermissions != null)
+                list.addAll(packInfo.requestedPermissions)
+        }
+        catch (e : NameNotFoundException) {
+            return list
+        }
+        return list
+    }
+
+    private fun getTopApplicationPackage() : String {
+        var topPackageName = ""
+        val mUsageStatsManager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
+        val time = System.currentTimeMillis()
+        // We get usage stats for the last 10 seconds
+        val stats = mUsageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY,
+                                                       time - 1000 * 10,
+                                                       time)
+        // Sort the stats by the last time used
+        if (stats != null) {
+            val mySortedMap : SortedMap<Long, UsageStats> = TreeMap()
+            for (usageStats in stats) {
+                mySortedMap[usageStats.lastTimeUsed] = usageStats
+            }
+            if (!mySortedMap.isEmpty()) {
+                topPackageName = mySortedMap[mySortedMap.lastKey()]!!.packageName
+
             }
         }
+        return topPackageName
     }
+
     override fun onUnbind(intent : Intent?) : Boolean {
         return super.onUnbind(intent)
     }
 
-    private fun disableCamera(status : Boolean) {
+    fun isMDMExecuted() : Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            appThread != null
+        else
+            policy.getCameraDisabled(receiver)
 
-        policy.setCameraDisabled(receiver, status)
+    }
+
+    private fun runMDMThread() {
+        appThread = Thread {
+            while (!Thread.interrupted()) {
+                try {
+                    Thread.sleep(500)
+                    val permission = getPermissions(getTopApplicationPackage())
+                    if (permission.contains(DENY_PERMISSION[0]) || permission.contains(
+                            DENY_PERMISSION[1]) || permission.isEmpty()) {
+                        Log.w(LOG_TAG, "founded deny application.")
+                        Handler(Looper.getMainLooper()).post {
+                            startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                                              .apply {
+                                                  flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                              })
+                        }
+
+
+                    }
+                }
+                catch (e : InterruptedException) {
+                    break
+                }
+            }
+
+        }.also { it.start() }
+    }
+    private fun disableCamera(status : Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            //10이상일경우
+            preferences.edit().putBoolean("mdm", status).apply()
+            if (status && appThread == null) {
+                //현재 실행중이 아닐경우.
+                runMDMThread()
+            }
+            else {
+                appThread?.interrupt()
+                appThread = null
+            }
+        }
+        else {
+            policy.setCameraDisabled(receiver, status)
+        }
         //policy.setUninstallBlocked(receiver, packageName, status) <- profile owner 설정필요
     }
 
@@ -186,7 +253,7 @@ class MdmService : Service() {
     fun save(uuid : String, auth : String, delete : String, ip : String) {
         preferences.edit().putString("uuid", uuid).putString("auth", auth)
             .putString("delete", delete).putString("ip", ip).apply()
-        mdmData = MDMData(UUID.fromString(uuid), delete, auth, ip) //초기화
+        mdmData = MDMData(UUID.fromString(uuid), delete, auth, ip, false) //초기화
 
     }
 
@@ -195,14 +262,12 @@ class MdmService : Service() {
         val auth = preferences.getString("auth", null)
         val delete = preferences.getString("delete", null)
         val ip = preferences.getString("ip", null)
+        val isEnabled = preferences.getBoolean("mdm", false)
         if (!uuid.isNullOrEmpty() && !auth.isNullOrEmpty() && !delete.isNullOrEmpty() && !ip.isNullOrEmpty())
-            mdmData = MDMData(UUID.fromString(uuid), delete, auth, ip)
+            mdmData = MDMData(UUID.fromString(uuid), delete, auth, ip, isEnabled)
 
     }
 
-    fun isMDMExecuted() : Boolean {
-        return policy.getCameraDisabled(receiver)
-    }
 
     fun isServerConnected() : Boolean {
         return handler.isOpen
@@ -295,7 +360,8 @@ class MdmService : Service() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         var channel = manager.getNotificationChannel(CHANNEL_ID)
         if (channel == null) {
-            channel = NotificationChannel(CHANNEL_ID, title, NotificationManager.IMPORTANCE_HIGH)
+            channel =
+                NotificationChannel(CHANNEL_ID, title, NotificationManager.IMPORTANCE_HIGH)
             manager.createNotificationChannel(channel)
         }
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -316,7 +382,6 @@ class MdmService : Service() {
         // 2초보다 작은 경우 올바른 응답
         return (System.currentTimeMillis() - time) <= (TIMEOUT * 2000)
     }
-
 
 
 }

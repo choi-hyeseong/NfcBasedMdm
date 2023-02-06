@@ -11,4 +11,5 @@
     <string name="ndm_server_connected">서버와 현재 연결되어 있습니다. 😊</string>
     <string name="ndm_executed">현재 서비스가 실행중입니다. 카메라 사용이 제한됩니다.</string>
     <string name="ndm_not_executed">현재 서비스가 중단되었습니다. 카메라 사용이 가능합니다.</string>
+    <string name="application_denyed">mdm사용중에는 실행 할 수 없는 애플리케이션입니다.</string>
 </resources>
