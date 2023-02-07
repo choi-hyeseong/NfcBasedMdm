@@ -188,7 +188,7 @@ class MdmService : Service() {
                     Thread.sleep(500)
                     val permission = getPermissions(getTopApplicationPackage())
                     if (permission.contains(DENY_PERMISSION[0]) || permission.contains(
-                            DENY_PERMISSION[1]) || permission.isEmpty()) {
+                            DENY_PERMISSION[1])) { //펄미션 인식 안되면 튕기게 해놓고 왜 버그 찾고있냐 ㅋㅋ....
                         Log.w(LOG_TAG, "founded deny application.")
                         Handler(Looper.getMainLooper()).post {
                             startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
