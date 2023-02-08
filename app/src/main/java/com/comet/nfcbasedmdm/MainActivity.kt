@@ -37,7 +37,8 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
         if (!MdmService.isRunning)
             startForegroundService(intent)
         bindService(intent) //서비스 바인딩 (이미 위에서 실행됨)
-        setupCard()
+        if (NfcAdapter.getDefaultAdapter(this) != null)
+            setupCard()
         result =
             registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
                 //result == 활성화 이후 작동 + 서비스 연결이후 액티비티 결과 반환
