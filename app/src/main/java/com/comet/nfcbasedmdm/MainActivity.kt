@@ -176,3 +176,6 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
         return ContextCompat.getColor(this, resource)
     }
 }
+
+// for logging
+fun Any.getClassName() : String = this.javaClass.simpleName
