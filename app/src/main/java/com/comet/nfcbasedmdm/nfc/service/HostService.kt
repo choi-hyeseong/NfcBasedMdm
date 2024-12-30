@@ -1,4 +1,4 @@
-package com.comet.nfcbasedmdm
+package com.comet.nfcbasedmdm.nfc.service
 
 
 import android.content.Intent
@@ -6,6 +6,7 @@ import android.nfc.cardemulation.HostApduService
 
 import android.os.Bundle
 import android.util.Log
+import com.comet.nfcbasedmdm.service.LOG_TAG
 
 const val CARD_ACTION = "ACTION_CARD_ACTION"
 

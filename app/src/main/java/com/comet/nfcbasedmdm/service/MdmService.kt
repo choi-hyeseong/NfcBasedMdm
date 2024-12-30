@@ -1,4 +1,4 @@
-package com.comet.nfcbasedmdm
+package com.comet.nfcbasedmdm.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -14,15 +14,15 @@ import android.content.pm.PackageManager.GET_PERMISSIONS
 import android.content.pm.PackageManager.NameNotFoundException
 import android.os.*
 import android.util.Log
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.comet.nfcbasedmdm.R
 import com.comet.nfcbasedmdm.handler.WebSocketHandler
-import com.comet.nfcbasedmdm.model.MDMData
-import com.comet.nfcbasedmdm.model.WebSocketMessage
-import com.comet.nfcbasedmdm.util.EncryptUtil.Companion.AESDecrypt
-import com.comet.nfcbasedmdm.util.EncryptUtil.Companion.RSAEncrypt
+import com.comet.nfcbasedmdm.mdm.data.model.MDMData
+import com.comet.nfcbasedmdm.mdm.connection.websocket.model.WebSocketMessage
+import com.comet.nfcbasedmdm.common.util.EncryptUtil.Companion.AESDecrypt
+import com.comet.nfcbasedmdm.common.util.EncryptUtil.Companion.RSAEncrypt
 import com.fasterxml.jackson.databind.ObjectMapper
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -245,8 +245,8 @@ class MdmService : Service() {
 
     private fun save() {
         mdmData?.apply {
-            preferences.edit().putString("uuid", uuid.toString()).putString("auth", auth)
-                .putString("delete", delete).apply()
+            preferences.edit().putString("uuid", uuid.toString()).putString("auth", authID)
+                .putString("delete", deleteID).apply()
         }
     }
 
@@ -328,7 +328,7 @@ class MdmService : Service() {
                     val auth = split[0]
                     val time = split[1].toLong()
                     val value = split[2].toBoolean()
-                    if (auth != mdmData?.auth && !checkTimeValid(time))
+                    if (auth != mdmData?.authID && !checkTimeValid(time))
                         Log.w(LOG_TAG, "invalid request")
                     else {
                         disableCamera(value)

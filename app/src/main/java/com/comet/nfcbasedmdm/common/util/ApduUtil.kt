@@ -1,4 +1,4 @@
-package com.comet.nfcbasedmdm.util
+package com.comet.nfcbasedmdm.common.util
 
 class ApduUtil {
 

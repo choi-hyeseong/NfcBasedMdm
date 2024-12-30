@@ -1,4 +1,4 @@
-package com.comet.nfcbasedmdm.util
+package com.comet.nfcbasedmdm.common.util
 
 import android.annotation.SuppressLint
 import java.nio.charset.StandardCharsets

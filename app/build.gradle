@@ -33,6 +33,11 @@ android {
 }
 
 dependencies {
+    implementation("com.google.code.gson:gson:2.7")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    implementation("com.github.skydoves:sandwich-retrofit:2.0.0")
+    implementation("com.squareup.retrofit2:retrofit:2.5.0")
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation 'androidx.security:security-crypto-ktx:1.1.0-alpha04'
     implementation 'androidx.core:core-ktx:1.7.0'
     implementation 'androidx.appcompat:appcompat:1.5.1'

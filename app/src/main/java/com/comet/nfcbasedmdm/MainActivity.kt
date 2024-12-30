@@ -1,23 +1,29 @@
 package com.comet.nfcbasedmdm
 
-import android.Manifest
 import android.app.AppOpsManager
 import android.content.*
-import android.content.pm.PackageManager
 import android.nfc.NfcAdapter
 import android.nfc.cardemulation.CardEmulation
 import android.os.*
 import android.provider.Settings
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.comet.nfcbasedmdm.callback.ActivityCallback
-import com.comet.nfcbasedmdm.util.ApduUtil
-import com.comet.nfcbasedmdm.util.EncryptUtil
+import com.comet.nfcbasedmdm.camera.repository.ThreadCameraRepository
+import com.comet.nfcbasedmdm.common.cipher.AESCrypto
+import com.comet.nfcbasedmdm.common.key.KeyStoreProvider
+import com.comet.nfcbasedmdm.common.storage.CryptoDataStore
+import com.comet.nfcbasedmdm.common.storage.PreferenceDataStore
+import com.comet.nfcbasedmdm.nfc.service.CARD_ACTION
+import com.comet.nfcbasedmdm.nfc.service.HostService
+import com.comet.nfcbasedmdm.service.LOG_TAG
+import com.comet.nfcbasedmdm.service.MdmService
+import com.comet.nfcbasedmdm.common.util.ApduUtil
+import com.comet.nfcbasedmdm.common.util.EncryptUtil
 
 
 class MainActivity : AppCompatActivity(), ActivityCallback {
@@ -31,6 +37,19 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
 
     override fun onCreate(savedInstanceState : Bundle?) {
         super.onCreate(savedInstanceState)
+        val keyProvider = KeyStoreProvider()
+        val cryptoDataStore = CryptoDataStore(PreferenceDataStore(applicationContext), keyProvider.getKey(), AESCrypto())
+        overlay = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            //사용시간 권한 활성화 체크
+            if (isUsageEnabled()) {
+                val repo = ThreadCameraRepository(applicationContext).disableCamera()
+            }
+        }
+
+        overlay.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+
+
+        /*
         setContentView(R.layout.activity_main)
         supportActionBar?.hide() //액션바 숨기기
         val intent = Intent(this, MdmService::class.java)
@@ -54,7 +73,7 @@ class MainActivity : AppCompatActivity(), ActivityCallback {
                 overlay.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
             }
         }
-
+        */
 
     }
 

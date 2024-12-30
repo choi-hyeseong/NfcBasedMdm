@@ -33,10 +33,10 @@
                 android:value="" />
         </activity>
         <service
-            android:name=".MdmService"
+            android:name=".service.MdmService"
             android:exported="false" />
 
-        <service android:name=".HostService"
+        <service android:name=".nfc.service.HostService"
             android:exported="true"
             android:permission="android.permission.BIND_NFC_SERVICE">
             <!-- Intent filter indicating that we support card emulation. -->
@@ -51,7 +51,7 @@
                 android:resource="@xml/aid_list"/>
         </service>
         <receiver
-            android:name=".AdminReceiver"
+            android:name=".camera.receiver.AdminReceiver"
             android:exported="true"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data

@@ -13,7 +13,9 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.bumptech.glide.Glide
 import com.comet.nfcbasedmdm.callback.ActivityCallback
-import com.comet.nfcbasedmdm.util.EncryptUtil
+import com.comet.nfcbasedmdm.service.LOG_TAG
+import com.comet.nfcbasedmdm.service.TIMEOUT
+import com.comet.nfcbasedmdm.common.util.EncryptUtil
 import com.fasterxml.jackson.databind.ObjectMapper
 import okhttp3.OkHttpClient
 import okhttp3.Request

@@ -1,8 +1,8 @@
 package com.comet.nfcbasedmdm.handler
 
 import android.util.Log
-import com.comet.nfcbasedmdm.LOG_TAG
-import com.comet.nfcbasedmdm.MdmService
+import com.comet.nfcbasedmdm.service.LOG_TAG
+import com.comet.nfcbasedmdm.service.MdmService
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
