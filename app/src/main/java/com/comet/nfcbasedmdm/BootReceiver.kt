@@ -1,23 +1,26 @@
 package com.comet.nfcbasedmdm
 
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.comet.nfcbasedmdm.service.LOG_TAG
-import com.comet.nfcbasedmdm.service.MdmService
+import com.comet.nfcbasedmdm.common.receiver.AbstractBroadcastReceiver
+import dagger.hilt.android.AndroidEntryPoint
 
-class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context?, intent: Intent?) {
-        intent?.let {
-            val action = intent.action
-            if (action.equals("android.intent.action.BOOT_COMPLETED")) {
-                //부팅 실행시
-                Log.i(LOG_TAG, "BOOT RECEIVED")
-                if (!MdmService.isRunning) //서비스가 실행중이 아니라면.
-                    context?.startForegroundService(Intent(context, MdmService::class.java))
-            }
-        }
+/**
+ * 부팅 감지 리시버
+ */
+@AndroidEntryPoint
+class BootReceiver : AbstractBroadcastReceiver() {
 
+    override fun isSupport(action: String): Boolean {
+        return action == "android.intent.action.BOOT_COMPLETED"
+    }
+
+    // 부팅시 mdm 시작
+    override fun handleIntent(context: Context, intent: Intent) {
+        Log.i(getClassName(), "BOOT RECEIVED")
+        context.startActivity(Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        })
     }
 }

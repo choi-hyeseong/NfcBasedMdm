@@ -3,384 +3,273 @@ package com.comet.nfcbasedmdm.service
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.app.admin.DevicePolicyManager
-import android.app.usage.UsageStats
-import android.app.usage.UsageStatsManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
-import android.content.pm.PackageManager.GET_PERMISSIONS
-import android.content.pm.PackageManager.NameNotFoundException
-import android.os.*
+import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.comet.nfcbasedmdm.R
-import com.comet.nfcbasedmdm.handler.WebSocketHandler
-import com.comet.nfcbasedmdm.mdm.data.model.MDMData
+import com.comet.nfcbasedmdm.camera.usecase.CheckCameraEnabledUseCase
+import com.comet.nfcbasedmdm.camera.usecase.DisableCameraUseCase
+import com.comet.nfcbasedmdm.camera.usecase.EnableCameraUseCase
+import com.comet.nfcbasedmdm.common.cipher.AESCrypto
+import com.comet.nfcbasedmdm.common.cipher.RSACrypto
+import com.comet.nfcbasedmdm.getClassName
+import com.comet.nfcbasedmdm.mdm.connection.key.usecase.GetPublicKeyUseCase
+import com.comet.nfcbasedmdm.mdm.connection.websocket.callback.WebSocketCallback
 import com.comet.nfcbasedmdm.mdm.connection.websocket.model.WebSocketMessage
-import com.comet.nfcbasedmdm.common.util.EncryptUtil.Companion.AESDecrypt
-import com.comet.nfcbasedmdm.common.util.EncryptUtil.Companion.RSAEncrypt
-import com.fasterxml.jackson.databind.ObjectMapper
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
-import java.util.*
-import java.util.concurrent.TimeUnit
+import com.comet.nfcbasedmdm.mdm.connection.websocket.type.WebSocketStatus
+import com.comet.nfcbasedmdm.mdm.connection.websocket.usecase.WebSocketConnectUseCase
+import com.comet.nfcbasedmdm.mdm.connection.websocket.usecase.WebSocketDisconnectUseCase
+import com.comet.nfcbasedmdm.mdm.connection.websocket.usecase.WebSocketSendMessageUseCase
+import com.comet.nfcbasedmdm.mdm.data.model.MDMData
+import com.comet.nfcbasedmdm.mdm.data.usecase.GetMDMDataUseCase
+import com.comet.nfcbasedmdm.mdm.data.usecase.SaveMDMDataUseCase
+import com.comet.nfcbasedmdm.mdm.view.MainFragment.Companion.NDM_CHANGE
+import com.comet.nfcbasedmdm.mdm.view.MainFragment.Companion.NDM_SERVER_CHANGE
+import com.skydoves.sandwich.getOrNull
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-
-const val LOG_TAG = "NFC_MDM"
-const val CHANNEL_ID = "NFC_MDM_CHANNEL"
-const val NDM_CHANGE = "NDM_CHANGE"
-const val NDM_SERVER_CHANGE = "NDM_SERVER_CHANGE"
-const val TIMEOUT = 2L
-const val FILE_NAME = "encrypted_file"
-val DENY_PERMISSION = listOf("android.permission.CAMERA", "android.permission.RECORD_AUDIO")
-
-class MdmService : Service() {
-
-    // 코틀린 람다는 중괄호로 묶고 (x : type, y : type) -> lambda
-    private lateinit var receiver : ComponentName
-    private lateinit var policy : DevicePolicyManager
-    private lateinit var thread : Thread
-    private lateinit var handler : WebSocketHandler
-    private var appThread : Thread? = null //P이상 버젼 전용 쓰레드 변수
-    lateinit var encryptKey : String
-    var mdmData : MDMData? = null
-
-    /*private val uuid = UUID.fromString("eabf6f0b-0da1-44f0-82d8-b29b33d6e33a") //임시 uuid
-    private val auth = "ewvG6EQOYH"
-    private val del = "iNb3HREfEm"*/
-    private val mapper : ObjectMapper = ObjectMapper()
-    private val client = OkHttpClient.Builder().connectTimeout(TIMEOUT, TimeUnit.SECONDS)
-        .readTimeout(TIMEOUT, TimeUnit.SECONDS).build() //2초 정도로 지정
-    private val request : Request by lazy {
-        Request.Builder().url("ws://${mdmData?.ip}/mdm").build() //어처피 데이터 사용하는 경우는 mdm이 null이 아닐때만.
-    }
-    private val keyRequest : Request by lazy {
-        Request.Builder().url("http://${mdmData?.ip}/encrypt").build()
-    }
-    private val binder = LocalBinder()
-
-    //암호화된 preference
-    private val preferences : SharedPreferences by lazy {
-        val masterKey = MasterKey.Builder(applicationContext, MasterKey.DEFAULT_MASTER_KEY_ALIAS)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
-
-        EncryptedSharedPreferences.create(
-            applicationContext,
-            FILE_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    }
+@AndroidEntryPoint
+class MdmService : Service(), WebSocketCallback {
 
     companion object {
-        var isRunning = false
+        private const val CHANNEL_ID = "NFC_MDM_CHANNEL" // notification timeout
+        private const val TIMEOUT = 2L // websocket message timeout
     }
 
-    inner class LocalBinder : Binder() {
+    // hilt inject
 
-        fun getService() : MdmService {
-            return this@MdmService //mdm this 접근하기 위해선 inner 사용필수.
-        }
-    }
+    // get mdm data
+    @Inject
+    lateinit var getMDMDataUseCase: GetMDMDataUseCase
 
-    override fun onBind(p0 : Intent?) : IBinder {
-        //다른 프로세스 접근 고려 X
-        return binder
-    }
+    @Inject
+    lateinit var saveMDMDataUseCase: SaveMDMDataUseCase
 
+    // camera enable / disable / get info
+    @Inject
+    lateinit var enableCameraUseCase: EnableCameraUseCase
 
-    override fun onDestroy() {
-        thread.interrupt() //running 취소
-        save()
-        isRunning = false
-        appThread?.interrupt() //앱 확인 취소
-        appThread = null
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(1) //notification 취소
-    }
+    @Inject
+    lateinit var disableCameraUseCase: DisableCameraUseCase
 
-    override fun onStartCommand(intent : Intent?, flags : Int, startId : Int) : Int {
-        Log.i(LOG_TAG, "SERVICE STARTED")
-        policy = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        receiver = ComponentName(packageName, "$packageName.AdminReceiver")
-        handler = WebSocketHandler(this)
-        load()
-        initChannel() //notification 실행
+    @Inject
+    lateinit var checkCameraEnabledUseCase: CheckCameraEnabledUseCase
 
-        thread = Thread {
-            while (!Thread.interrupted()) {
-                try {
-                    //mdm 서비스가 실행가능한 경우
-                    if (isMDMRegistered() && isAdminActivated())
-                        run()
-                    Thread.sleep(10000) //connection 유지
-                }
-                catch (e : InterruptedException) {
-                    break
-                }
-            }
-        }.also { it.start() }
-        if (isMDMRegistered() && mdmData?.isEnabled!!)
-            runMDMThread()
-        isRunning = true
+    // websocket
+    @Inject
+    lateinit var webSocketConnectUseCase: WebSocketConnectUseCase
 
-        return START_STICKY //다시 시작, 인텐트 null
-    }
+    @Inject
+    lateinit var webSocketDisconnectUseCase: WebSocketDisconnectUseCase
 
-    @Suppress("DEPRECATION")
-    //api 33이상
-    private fun getPermissions(pack : String) : List<String> {
-        val list = ArrayList<String>()
-        try {
-            val packInfo = packageManager.getPackageInfo(pack, GET_PERMISSIONS)
-            if (packInfo.requestedPermissions != null)
-                list.addAll(packInfo.requestedPermissions)
-        }
-        catch (e : NameNotFoundException) {
-            return list
-        }
-        return list
-    }
+    @Inject
+    lateinit var webSocketSendMessageUseCase: WebSocketSendMessageUseCase
 
-    private fun getTopApplicationPackage() : String {
-        var topPackageName = ""
-        val mUsageStatsManager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
-        val time = System.currentTimeMillis()
-        // We get usage stats for the last 10 seconds
-        val stats = mUsageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY,
-                                                       time - 1000 * 10,
-                                                       time)
-        // Sort the stats by the last time used
-        if (stats != null) {
-            val mySortedMap : SortedMap<Long, UsageStats> = TreeMap()
-            for (usageStats in stats) {
-                mySortedMap[usageStats.lastTimeUsed] = usageStats
-            }
-            if (!mySortedMap.isEmpty()) {
-                topPackageName = mySortedMap[mySortedMap.lastKey()]!!.packageName
+    // for crypt
+    @Inject
+    lateinit var rsaCrypto: RSACrypto
 
-            }
-        }
-        return topPackageName
-    }
+    @Inject
+    lateinit var aesCrypto: AESCrypto
 
-    override fun onUnbind(intent : Intent?) : Boolean {
-        return super.onUnbind(intent)
-    }
+    // public key retrieve
+    @Inject
+    lateinit var getPublicKeyUseCase: GetPublicKeyUseCase
 
-    fun isMDMExecuted() : Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-            appThread != null
-        else
-            policy.getCameraDisabled(receiver)
-
-    }
-
-    private fun runMDMThread() {
-        appThread = Thread {
-            while (!Thread.interrupted()) {
-                try {
-                    Thread.sleep(500)
-                    val permission = getPermissions(getTopApplicationPackage())
-                    if (permission.contains(DENY_PERMISSION[0]) || permission.contains(
-                            DENY_PERMISSION[1])) { //펄미션 인식 안되면 튕기게 해놓고 왜 버그 찾고있냐 ㅋㅋ....
-                        Log.w(LOG_TAG, "founded deny application.")
-                        Handler(Looper.getMainLooper()).post {
-                            startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-                                              .apply {
-                                                  flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                              })
-                        }
+    // 맨처음 초기화될 mdmData
+    lateinit var mdmData: MDMData
 
 
-                    }
-                }
-                catch (e : InterruptedException) {
-                    break
-                }
-            }
-
-        }.also { it.start() }
-    }
-    private fun disableCamera(status : Boolean) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            //10이상일경우
-            preferences.edit().putBoolean("mdm", status).apply()
-            if (status && appThread == null) {
-                //현재 실행중이 아닐경우.
-                runMDMThread()
-            }
-            else {
-                appThread?.interrupt()
-                appThread = null
-            }
-        }
-        else {
-            policy.setCameraDisabled(receiver, status)
-        }
-        //policy.setUninstallBlocked(receiver, packageName, status) <- profile owner 설정필요
-    }
-
-    fun isAdminActivated() : Boolean {
-        return policy.isAdminActive(receiver)
-    }
-
-    fun getRequestAdminIntent() : Intent {
-        return Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).putExtra(
-            DevicePolicyManager.EXTRA_DEVICE_ADMIN,
-            receiver
-        )
-    }
-
-    fun isMDMRegistered() : Boolean {
-        //서버와 연결되어 uuid값이 존재하는가?
-        return mdmData != null //초기화가 되지 않은경우 회원가입이 되지 않은것.
-        //null이 아닌경우만 활성화 된거지..ㅜㅜㅜㅜㅜ
-    }
-
-    private fun save() {
-        mdmData?.apply {
-            preferences.edit().putString("uuid", uuid.toString()).putString("auth", authID)
-                .putString("delete", deleteID).apply()
-        }
-    }
-
-    fun save(uuid : String, auth : String, delete : String, ip : String) {
-        preferences.edit().putString("uuid", uuid).putString("auth", auth)
-            .putString("delete", delete).putString("ip", ip).apply()
-        mdmData = MDMData(UUID.fromString(uuid), delete, auth, ip, false) //초기화
-
-    }
-
-    private fun load() {
-        val uuid = preferences.getString("uuid", null)
-        val auth = preferences.getString("auth", null)
-        val delete = preferences.getString("delete", null)
-        val ip = preferences.getString("ip", null)
-        val isEnabled = preferences.getBoolean("mdm", false)
-        if (!uuid.isNullOrEmpty() && !auth.isNullOrEmpty() && !delete.isNullOrEmpty() && !ip.isNullOrEmpty())
-            mdmData = MDMData(UUID.fromString(uuid), delete, auth, ip, isEnabled)
-
-    }
-
-
-    fun isServerConnected() : Boolean {
-        return handler.isOpen
-    }
-
-    private fun run() {
-        //공개키 얻는 과정
-        if (!isServerConnected()) {
-            try {
-                val result = client.newCall(keyRequest).execute().body.string()
-                encryptKey = JSONObject(
-                    result
-                ).get("data").toString()
-
-                val socket = client.newWebSocket(request, handler)
-                val message = WebSocketMessage(
-                    WebSocketMessage.Status.HAND_SHAKE,
-                    RSAEncrypt(mdmData?.uuid.toString(), encryptKey)
-                ) //handshake
-                socket.send(mapper.writeValueAsString(message))
-            }
-            catch (e : Exception) {
-                Log.w(LOG_TAG, "Request encountered timeout. Retry in 10 seconds.")
-            }
-        }
-    }
-
-
-    fun onMessage(text : String) {
-        val message = mapper.readValue(text, WebSocketMessage::class.java) //직렬화 문제잖아..
-        val status = message.status
-        val data = message.data
-        when (status) {
-            WebSocketMessage.Status.PING -> {
-                //PING 요청
-                val result = handler.sendMessage(
-                    mapper.writeValueAsString(
-                        WebSocketMessage(
-                            WebSocketMessage.Status.PONG,
-                            "RESPONSE PING"
-                        )
-                    )
-                )
-                Log.i(LOG_TAG, "ping result : $result")
-            }
-            WebSocketMessage.Status.EXECUTE_MDM -> {
-                //MDM 요청
-                val decrypt = AESDecrypt(data, mdmData?.uuid.toString())
-                if (decrypt.isEmpty())
-                    Log.w(LOG_TAG, "can't execute mdm")
-                else {
-                    val split = decrypt.split("|")
-                    if (split.size != 3) {
-                        Log.w(LOG_TAG, "invalid data")
-                        return
-                    }
-
-                    val auth = split[0]
-                    val time = split[1].toLong()
-                    val value = split[2].toBoolean()
-                    if (auth != mdmData?.authID && !checkTimeValid(time))
-                        Log.w(LOG_TAG, "invalid request")
-                    else {
-                        disableCamera(value)
-                        sendCameraChange(value)
-                        handler.sendMessage(
-                            mapper.writeValueAsString(
-                                WebSocketMessage(
-                                    WebSocketMessage.Status.RESPONSE,
-                                    RSAEncrypt(
-                                        "$auth|${System.currentTimeMillis()}|${
-                                            isMDMExecuted()
-                                        }", encryptKey
-                                    )
-                                )
-                            )
-                        )
-                    }
-
-                }
-            }
-            else -> return
-        }
-
-
-    }
-
-    private fun initChannel() {
+    private fun startNotification() {
         val title = getString(R.string.app_name)
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         var channel = manager.getNotificationChannel(CHANNEL_ID)
         if (channel == null) {
-            channel =
-                NotificationChannel(CHANNEL_ID, title, NotificationManager.IMPORTANCE_HIGH)
+            channel = NotificationChannel(CHANNEL_ID, title, NotificationManager.IMPORTANCE_HIGH)
             manager.createNotificationChannel(channel)
         }
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentText(getString(R.string.channel_content)).build()
+            .setContentText(getString(R.string.channel_content))
+            .build()
         startForeground(1, notification)
     }
 
-    private fun sendCameraChange(status : Boolean) {
-        sendBroadcast(Intent().setAction(NDM_CHANGE).putExtra("status", status))
+    private fun stopNotification() {
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(1) //notification 취소
     }
 
-    fun sendServerStatChange(status : Boolean) {
-        sendBroadcast(Intent().setAction(NDM_SERVER_CHANGE).putExtra("status", status))
+    // 서비스 시작
+    private fun startService() {
+        Log.i(getClassName(), "SERVICE STARTED")
+        startNotification() //notification 실행
+        CoroutineScope(Dispatchers.IO).launch {
+            val data = getMDMDataUseCase()
+            if (data == null) {
+                Log.e(getClassName(), "MDM Data isn't initialized.")
+                stopService()
+                return@launch
+            }
+
+            mdmData = data
+            initCamera() // 카메라 금지여부 설정
+            webSocketConnectUseCase(data.ip, this@MdmService) // websocket connect
+        }
     }
 
-    private fun checkTimeValid(time : Long) : Boolean {
+    // 최초 서비스 실행시 카메라 상태 변경
+    private fun initCamera() {
+        val isMDMEnabled = mdmData.isEnabled
+        // 설정상태와 허용상태가 반전된경우 (true - false / false - true)
+        if (isMDMEnabled == !checkCameraEnabledUseCase()) return
+        changeCameraEnabledStatus(!isMDMEnabled)
+    }
+
+    override fun onMessage(message: WebSocketMessage) {
+        val status = message.status
+        val data = message.data
+        when (status) {
+            WebSocketStatus.PING -> {
+                //PING 요청 - heart beat
+                CoroutineScope(Dispatchers.IO).launch {
+                    kotlin.runCatching {
+                        webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.PONG, "RESPONSE PING"))
+                    }.onSuccess {
+                        Log.i(getClassName(), "pong success")
+                    }.onFailure {
+                        Log.e(getClassName(), "pong failure")
+                    }
+                }
+            }
+
+            WebSocketStatus.EXECUTE_MDM -> {
+                //MDM 요청
+                // uuid decrypt
+                val decrypt = aesCrypto.decrypt(data, mdmData.uuid.toString())
+                if (decrypt.isEmpty()) {
+                    Log.w(getClassName(), "can't execute mdm")
+                    return
+                }
+                // 올바른 요청인지 확인
+                val split = decrypt.split("|")
+                if (split.size != 3) {
+                    Log.w(getClassName(), "invalid mdm data")
+                    return
+                }
+                val authId = split[0]
+                val time = split[1].toLong()
+                val cameraDenied = split[2].toBoolean()
+                if (authId != mdmData.authID && !checkTimeValid(time)) {
+                    Log.w(getClassName(), "invalid request")
+                    return
+                }
+                changeCameraEnabledStatus(!cameraDenied)
+                sendCameraStatusChange(!cameraDenied)
+                CoroutineScope(Dispatchers.IO).launch {
+                    val rsaKey = getPublicKeyUseCase(mdmData.ip).getOrNull()
+                    if (rsaKey == null) {
+                        // 만약 RSA 퍼블릭키를 못가져온경우 일단 로깅.
+                        // MDM DATA 초기화시 얘도 초기화 안함? -> 그 사이에 서버 껏다 켜져서 퍼블릭키 바뀌면?
+                        Log.e(getClassName(), "Can't retrieve RSA Public Key..")
+                        return@launch
+                    }
+                    val response: String = authId.plus("|")
+                        .plus(System.currentTimeMillis().toString())
+                        .plus("|")
+                        .plus((!checkCameraEnabledUseCase()).toString())
+                    val encryptResponse: String = rsaCrypto.encrypt(response, rsaKey.data)
+                    if (encryptResponse.isEmpty()) {
+                        // 암호화 실패한경우 리턴
+                        Log.e(getClassName(), "Can't encrypt response Message..")
+                        return@launch
+                    }
+                    webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.RESPONSE, encryptResponse))
+                }
+            }
+
+            else -> return
+        }
+    }
+
+    private fun checkTimeValid(time: Long): Boolean {
         // 2초보다 작은 경우 올바른 응답
         return (System.currentTimeMillis() - time) <= (TIMEOUT * 2000)
+    }
+
+    // 서비스 종료
+    private fun stopService() {
+        Log.i(getClassName(), "SERVICE STOPPED")
+        stopNotification()
+        CoroutineScope(Dispatchers.IO).launch {
+            webSocketDisconnectUseCase()
+        }
+    }
+
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        startService()
+        return START_STICKY //다시 시작, 인텐트 null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopService()
+    }
+
+    // bind 안씀
+    override fun onBind(intent: Intent?): IBinder? {
+        return null
+    }
+
+    // 카메라 허용여부 변경
+    private fun changeCameraEnabledStatus(enabled: Boolean) {
+        if (enabled) //허용
+            enableCameraUseCase()
+        else // 비허용
+            disableCameraUseCase()
+        mdmData.isEnabled = enabled
+        CoroutineScope(Dispatchers.IO).launch {
+            saveMDMDataUseCase(mdmData)
+        }
+    }
+
+    // 카메라 잠금여부 변환 알려줌
+    private fun sendCameraStatusChange(status: Boolean) {
+        sendBroadcast(Intent(NDM_CHANGE).putExtra("status", status))
+    }
+
+    // 서버 연결 여부 알려줌
+    private fun sendServerStatusChange(status: Boolean) {
+        sendBroadcast(Intent(NDM_SERVER_CHANGE).putExtra("status", status))
+    }
+
+
+    override fun onOpen() {
+        // 서버 오픈 알림
+        Log.i(getClassName(), "Socket Opened")
+        sendServerStatusChange(true)
+        CoroutineScope(Dispatchers.IO).launch {
+            // 웹소켓 연결시 hand shake 시행
+            val rsaKey = getPublicKeyUseCase(mdmData.ip).getOrNull()
+            if (rsaKey == null) {
+                Log.e(getClassName(), "Can't retrieve rsa key")
+                return@launch
+            }
+            webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.HAND_SHAKE, rsaCrypto.encrypt(mdmData.uuid.toString(), rsaKey.data)))
+        }
+
+    }
+
+    override fun onClose(reason: String) {
+        // 서버 닫힘 알림
+        sendServerStatusChange(false)
     }
 
 

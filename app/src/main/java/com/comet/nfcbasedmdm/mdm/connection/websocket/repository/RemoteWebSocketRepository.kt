@@ -10,15 +10,13 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import okio.ByteString
-import java.nio.charset.Charset
 
 class RemoteWebSocketRepository(private val okHttpClient: OkHttpClient) : WebsocketRepository {
 
-    private var webSocket : WebSocket? = null
+    private var webSocket: WebSocket? = null
     private val gson = Gson()
 
-    override suspend fun connect(url : String, callback: WebSocketCallback) {
+    override suspend fun connect(url: String, callback: WebSocketCallback) {
         val request = Request.Builder().url("ws://$url/mdm").build()
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -30,9 +28,15 @@ class RemoteWebSocketRepository(private val okHttpClient: OkHttpClient) : Websoc
                 this@RemoteWebSocketRepository.webSocket = null
             }
 
-            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                super.onFailure(webSocket, t, response)
+                Log.e(getClassName(), response?.message ?: "", t)
+            }
+
+            // 웨 string이면서 byteString이라....
+            override fun onMessage(webSocket: WebSocket, text: String) {
                 kotlin.runCatching {
-                   gson.fromJson(bytes.string(Charset.defaultCharset()), WebSocketMessage::class.java)
+                    gson.fromJson(text, WebSocketMessage::class.java)
                 }.onSuccess {
                     callback.onMessage(it)
                 }.onFailure {
@@ -47,8 +51,7 @@ class RemoteWebSocketRepository(private val okHttpClient: OkHttpClient) : Websoc
     }
 
     override suspend fun sendMessage(message: WebSocketMessage) {
-        if (!isConnected())
-            return
+        if (!isConnected()) return
         webSocket?.send(gson.toJson(message))
     }
 

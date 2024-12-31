@@ -1,9 +1,12 @@
 <resources>
     <string name="app_name">NDM</string>
+    <string name="register_success">회원가입에 성공했습니다.</string>
     <string name="channel_content">MDM 서비스가 실행중입니다.</string>
     <string name="app_register">NDM Register</string>
     <string name="register_http">http://</string>
+    <string name="url_invalid">url이 비어있습니다. 주소를 올바르게 입력해주세요.</string>
     <string name="wait_response">현재 서버로 요청이 전송중입니다. 잠시후 다시 시도해주세요.</string>
+    <string name="public_key_error">공개키 흭득에 실패했습니다. 로그를 참조해주세요.</string>
     <string name="response_error">서버와 연결중 오류가 발생했습니다. 로그를 참조해주세요.</string>
     <string name="admin_error_text">관리자 권한이 허용되어야 정상적인 실행이 가능합니다.</string>
     <string name="ndm_main">NFC MDM</string>
@@ -12,4 +15,6 @@
     <string name="ndm_executed">현재 서비스가 실행중입니다. 카메라 사용이 제한됩니다.</string>
     <string name="ndm_not_executed">현재 서비스가 중단되었습니다. 카메라 사용이 가능합니다.</string>
     <string name="application_denyed">mdm사용중에는 실행 할 수 없는 애플리케이션입니다.</string>
+    <string name="device_admin_required">기기 관리자 권한이 필요합니다.</string>
+    <string name="usage_required">mdm을 사용하기 위해선 사용 시간 확인 권한이 필요합니다.</string>
 </resources>

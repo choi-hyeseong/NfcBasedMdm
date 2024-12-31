@@ -6,20 +6,10 @@ import androidx.fragment.app.Fragment
 
 interface ActivityCallback {
 
-    fun switch(frag : Fragment, replace: Boolean)
+    // 메인 화면으로 이동
+    fun switchToMain()
 
-    fun saveToken(uuid : String, auth : String, delete : String, ip: String)
-
-    fun registerActivityReceiver(receiver: BroadcastReceiver, filter: IntentFilter)
-
-    fun runOnMainThread(r : Runnable)
-
-    fun getServerStatus() : Boolean
-
-    fun getMdmStatus() : Boolean
-
-    fun getContextString(resource : Int) : String
-
-    fun getContextColor(resource : Int) : Int
+    // 회원가입 화면으로 이동
+    fun switchToRegister()
 
 }

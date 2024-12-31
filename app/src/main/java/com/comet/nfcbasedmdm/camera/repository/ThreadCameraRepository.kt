@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.util.Log
 import com.comet.nfcbasedmdm.MainActivity
 import com.comet.nfcbasedmdm.getClassName
-import com.comet.nfcbasedmdm.service.LOG_TAG
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,7 +50,7 @@ class ThreadCameraRepository(private val context: Context) : CameraRepository {
                 val topApplication = getTopApplicationPackage() ?: continue
                 val permission = getPermissions(topApplication)
                 if (permission.contains(DENY_PERMISSION[0]) || permission.contains(DENY_PERMISSION[1])) {
-                    Log.w(LOG_TAG, "founded deny application.")
+                    Log.w(getClassName(), "founded deny application.")
                     startMDMActivity() //MDM 화면으로 이동하기. 토스트 전달하기 위해 getString 가져오는것보단 MDM 화면 보여주는게 적합할듯
                 }
             }

@@ -11,4 +11,4 @@ import java.util.UUID
  * @param ip 서버의 ip 정보입니다.
  * @param isEnabled mdm이 활성화 되어있는지 확인할 수 있는 정보입니다.
  */
-data class MDMData(val uuid : UUID, val authID : String, val deleteID : String, val ip: String, val isEnabled : Boolean)
+data class MDMData(val uuid : UUID, val authID : String, val deleteID : String, val ip: String, var isEnabled : Boolean)
