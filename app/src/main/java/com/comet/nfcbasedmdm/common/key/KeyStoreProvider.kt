@@ -35,7 +35,7 @@ class KeyStoreProvider : KeyProvider {
             KEY_ALIAS,  // 키 별칭
             KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)  // 패딩 없음
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)  
             .build()
 
         keyGenerator.init(keyGenParameterSpec)
