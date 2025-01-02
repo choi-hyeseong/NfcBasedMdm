@@ -5,6 +5,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import com.comet.nfcbasedmdm.MainActivity
 import com.comet.nfcbasedmdm.getClassName
@@ -32,7 +33,7 @@ class ThreadCameraRepository(private val context: Context) : CameraRepository {
     private val mUsageStatsManager: UsageStatsManager by lazy { context.getSystemService(Service.USAGE_STATS_SERVICE) as UsageStatsManager } //최상단 앱 가져오기 위한 스탯
 
     override fun isCameraEnabled(): Boolean {
-        return isRunning && job != null
+        return !isRunning && job == null
     }
 
     override fun enableCamera() {
@@ -68,7 +69,13 @@ class ThreadCameraRepository(private val context: Context) : CameraRepository {
 
     private fun getPermissions(pack: String): List<String> {
         return kotlin.runCatching {
-            val info = packageManager.getPackageInfo(pack, PackageManager.GET_PERMISSIONS)
+
+            val info =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    // 13이상부터는 permission flag 필요함
+                    packageManager.getPackageInfo(pack, PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()))
+                else
+                    packageManager.getPackageInfo(pack, PackageManager.GET_PERMISSIONS)
             if (info.requestedPermissions != null) info.requestedPermissions.toList()
             else listOf()
         }.getOrElse { listOf() }
