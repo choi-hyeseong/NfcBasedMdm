@@ -47,7 +47,7 @@ class MessageSerializer(private val aesCrypto: AESCrypto, private val rsaCrypto:
     }
 
     /**
-     * 결과값을 담은 MDMMessage를 역직렬화 합니다.
+     * 결과값을 담은 MDMMessage를 직렬화 합니다.
      * @param mdmMessage 결과값을 담은 모델입니다.
      * @param publicKey 암호화할 공개키입니다.
      * @return 직렬화 성공시 직렬화(암호화)된 문자열, 실패시 null을 리턴합니다.
