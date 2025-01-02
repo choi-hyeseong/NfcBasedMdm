@@ -37,7 +37,8 @@ class RegisterViewModel @Inject constructor(private val registerUseCase: Registe
     fun register(url : String) {
         requestProcessingLiveData.value = true //Main thread
         CoroutineScope(Dispatchers.IO).launch {
-            val publicKey = getPublicKeyUseCase(url.split("//")[1]).getOrNull()
+            val baseUrl = url.split("//")[1]
+            val publicKey = getPublicKeyUseCase(baseUrl).getOrNull()
             // public key를 못가져온경우
             if (publicKey == null) {
                 postError(ResponseType.PUBLIC_KEY_ERROR)
@@ -46,9 +47,9 @@ class RegisterViewModel @Inject constructor(private val registerUseCase: Registe
 
             // random uuid
             val uuid = UUID.randomUUID()
-            registerUseCase(url.plus("/auth"), uuid, publicKey.data).onSuccess {
+            registerUseCase(url, uuid, publicKey.data).onSuccess {
                 // http:// 이후 url 저장
-                saveMDMDataUseCase(MDMData(uuid, it.auth, it.delete, url.split("//")[1], false))
+                saveMDMDataUseCase(MDMData(uuid, it.auth, it.delete, baseUrl, false))
                 postOk()
             }.onFailure {
                 postError(ResponseType.INTERNAL_ERROR)

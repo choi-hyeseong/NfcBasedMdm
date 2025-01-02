@@ -10,10 +10,10 @@ import java.util.UUID
 
 class CryptAuthRepository(private val authAPI: AuthAPI, private val rsaCrypto: RSACrypto, private val aesCrypto: AESCrypto): AuthRepository {
 
-    override suspend fun register(url : String, uuid: UUID, key : String): Result<DecryptData> {
+    override suspend fun register(baseUrl : String, uuid: UUID, key : String): Result<DecryptData> {
         val encryptUUID : String = rsaCrypto.encrypt(uuid.toString(), key)
         return kotlin.runCatching {
-            val response = authAPI.register(url, AuthRequestDTO(encryptUUID)).getOrThrow()
+            val response = authAPI.register(baseUrl.plus("/auth"), AuthRequestDTO(encryptUUID)).getOrThrow()
             val decryptAuth = aesCrypto.decrypt(response.data.auth, uuid.toString())
             val decryptDelete = aesCrypto.decrypt(response.data.delete, uuid.toString())
             if (decryptAuth.isEmpty() || decryptAuth.isEmpty())
