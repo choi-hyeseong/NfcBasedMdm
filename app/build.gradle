@@ -52,7 +52,6 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.5.1'
     implementation 'com.google.android.material:material:1.7.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.0.1'
-    implementation 'com.squareup.okhttp3:okhttp:5.0.0-alpha.11'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'com.github.bumptech.glide:glide:4.11.0'
     testImplementation 'junit:junit:4.13.2'
