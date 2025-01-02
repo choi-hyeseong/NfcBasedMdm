@@ -139,7 +139,6 @@ class MdmService : Service(), WebSocketCallback {
         val isMDMEnabled = mdmData.isEnabled
         // 설정상태와 허용상태가 반전된경우 (true - false / false - true)
         Log.w(getClassName(), "$isMDMEnabled")
-        if (isMDMEnabled == !checkCameraEnabledUseCase()) return
         changeCameraEnabledStatus(!isMDMEnabled)
     }
 
@@ -226,11 +225,11 @@ class MdmService : Service(), WebSocketCallback {
         CoroutineScope(Dispatchers.IO).launch {
             saveMDMDataUseCase(mdmData)
         }
-        sendCameraStatusChange(enabled)
+        sendMDMStatusChange(mdmData.isEnabled) // mdm상태를 전송함
     }
 
     // 카메라 잠금여부 변환 알려줌
-    private fun sendCameraStatusChange(status: Boolean) {
+    private fun sendMDMStatusChange(status: Boolean) {
         sendBroadcast(Intent(NDM_CHANGE).putExtra("status", status))
     }
 

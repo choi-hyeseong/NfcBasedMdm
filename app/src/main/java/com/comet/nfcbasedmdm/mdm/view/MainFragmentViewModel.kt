@@ -28,7 +28,7 @@ class MainFragmentViewModel @Inject constructor(private val getMDMDataUseCase: G
         serverStatusLiveData.value = status
     }
 
-    fun updateMdmStatus(status: Boolean) {
+    fun updateMDMStatus(status: Boolean) {
         mdmStatusLiveData.value = status
     }
 

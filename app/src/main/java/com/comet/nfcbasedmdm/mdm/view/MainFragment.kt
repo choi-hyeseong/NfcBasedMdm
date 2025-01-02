@@ -95,10 +95,10 @@ class MainFragment : Fragment() {
         }
 
         // mdm 상태 observe
-        viewModel.mdmStatusLiveData.observe(viewLifecycleOwner) { status ->
-            val text = if (status) getString(R.string.ndm_executed) else getString(R.string.ndm_not_executed)
-            val color = if (status) requireContext().getColor(R.color.primaryNotifyColor) else requireContext().getColor(R.color.primaryAlertColor)
-            val image = if (status) R.drawable.lockmain else R.drawable.unlock
+        viewModel.mdmStatusLiveData.observe(viewLifecycleOwner) { mdmStatus ->
+            val text = if (mdmStatus) getString(R.string.ndm_executed) else getString(R.string.ndm_not_executed)
+            val color = if (mdmStatus) requireContext().getColor(R.color.primaryNotifyColor) else requireContext().getColor(R.color.primaryAlertColor)
+            val image = if (mdmStatus) R.drawable.lockmain else R.drawable.unlock
 
             view.ndmText.apply {
                 this.text = text
@@ -122,7 +122,7 @@ class MainFragment : Fragment() {
         // vm으로 데이터 전달해서 화면 회전시에도 데이터 유지할 수 있게
         override fun handleIntent(context: Context, intent: Intent) {
             val status: Boolean = intent.getBooleanExtra("status", false)
-            if (intent.action == NDM_CHANGE) viewModel.updateMdmStatus(status)
+            if (intent.action == NDM_CHANGE) viewModel.updateMDMStatus(status)
             else if (intent.action == NDM_SERVER_CHANGE) viewModel.updateServerStatus(status)
         }
     }
