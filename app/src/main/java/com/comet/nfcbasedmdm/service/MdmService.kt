@@ -137,8 +137,6 @@ class MdmService : Service(), WebSocketCallback {
     // 최초 서비스 실행시 카메라 상태 변경
     private fun initCamera() {
         val isMDMEnabled = mdmData.isEnabled
-        // 설정상태와 허용상태가 반전된경우 (true - false / false - true)
-        Log.w(getClassName(), "$isMDMEnabled")
         changeCameraEnabledStatus(!isMDMEnabled)
     }
 
