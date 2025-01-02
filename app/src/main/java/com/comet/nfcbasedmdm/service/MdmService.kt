@@ -19,6 +19,7 @@ import com.comet.nfcbasedmdm.mdm.connection.key.usecase.GetPublicKeyUseCase
 import com.comet.nfcbasedmdm.mdm.connection.websocket.callback.WebSocketCallback
 import com.comet.nfcbasedmdm.mdm.connection.websocket.model.WebSocketMessage
 import com.comet.nfcbasedmdm.mdm.connection.websocket.type.WebSocketStatus
+import com.comet.nfcbasedmdm.mdm.connection.websocket.usecase.WebSocketCheckConnectionUseCase
 import com.comet.nfcbasedmdm.mdm.connection.websocket.usecase.WebSocketConnectUseCase
 import com.comet.nfcbasedmdm.mdm.connection.websocket.usecase.WebSocketDisconnectUseCase
 import com.comet.nfcbasedmdm.mdm.connection.websocket.usecase.WebSocketSendMessageUseCase
@@ -27,10 +28,13 @@ import com.comet.nfcbasedmdm.mdm.data.usecase.GetMDMDataUseCase
 import com.comet.nfcbasedmdm.mdm.data.usecase.SaveMDMDataUseCase
 import com.comet.nfcbasedmdm.mdm.view.MainFragment.Companion.NDM_CHANGE
 import com.comet.nfcbasedmdm.mdm.view.MainFragment.Companion.NDM_SERVER_CHANGE
+import com.comet.nfcbasedmdm.service.model.MDMMessage
+import com.comet.nfcbasedmdm.service.serialize.MessageSerializer
 import com.skydoves.sandwich.getOrNull
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,7 +43,7 @@ class MdmService : Service(), WebSocketCallback {
 
     companion object {
         private const val CHANNEL_ID = "NFC_MDM_CHANNEL" // notification timeout
-        private const val TIMEOUT = 2L // websocket message timeout
+        private const val RETRY_TIME = 5 * 1000L //재접속 시간
     }
 
     // hilt inject
@@ -71,6 +75,9 @@ class MdmService : Service(), WebSocketCallback {
     @Inject
     lateinit var webSocketSendMessageUseCase: WebSocketSendMessageUseCase
 
+    @Inject
+    lateinit var webSocketCheckConnectionUseCase: WebSocketCheckConnectionUseCase
+
     // for crypt
     @Inject
     lateinit var rsaCrypto: RSACrypto
@@ -78,12 +85,15 @@ class MdmService : Service(), WebSocketCallback {
     @Inject
     lateinit var aesCrypto: AESCrypto
 
+    @Inject
+    lateinit var messageSerializer: MessageSerializer
+
     // public key retrieve
     @Inject
     lateinit var getPublicKeyUseCase: GetPublicKeyUseCase
 
     // 맨처음 초기화될 mdmData
-    lateinit var mdmData: MDMData
+    private lateinit var mdmData: MDMData
 
 
     private fun startNotification() {
@@ -97,6 +107,7 @@ class MdmService : Service(), WebSocketCallback {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentText(getString(R.string.channel_content))
+            .setOngoing(true) // 지워지지 않게
             .build()
         startForeground(1, notification)
     }
@@ -127,6 +138,7 @@ class MdmService : Service(), WebSocketCallback {
     private fun initCamera() {
         val isMDMEnabled = mdmData.isEnabled
         // 설정상태와 허용상태가 반전된경우 (true - false / false - true)
+        Log.w(getClassName(), "$isMDMEnabled")
         if (isMDMEnabled == !checkCameraEnabledUseCase()) return
         changeCameraEnabledStatus(!isMDMEnabled)
     }
@@ -138,58 +150,22 @@ class MdmService : Service(), WebSocketCallback {
             WebSocketStatus.PING -> {
                 //PING 요청 - heart beat
                 CoroutineScope(Dispatchers.IO).launch {
-                    kotlin.runCatching {
-                        webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.PONG, "RESPONSE PING"))
-                    }.onSuccess {
-                        Log.i(getClassName(), "pong success")
-                    }.onFailure {
-                        Log.e(getClassName(), "pong failure")
-                    }
+                    Log.i(getClassName(), "Pong sent")
+                    webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.PONG, "RESPONSE PING"))
                 }
             }
 
             WebSocketStatus.EXECUTE_MDM -> {
                 //MDM 요청
-                // uuid decrypt
-                val decrypt = aesCrypto.decrypt(data, mdmData.uuid.toString())
-                if (decrypt.isEmpty()) {
-                    Log.w(getClassName(), "can't execute mdm")
-                    return
-                }
-                // 올바른 요청인지 확인
-                val split = decrypt.split("|")
-                if (split.size != 3) {
-                    Log.w(getClassName(), "invalid mdm data")
-                    return
-                }
-                val authId = split[0]
-                val time = split[1].toLong()
-                val cameraDenied = split[2].toBoolean()
-                if (authId != mdmData.authID && !checkTimeValid(time)) {
-                    Log.w(getClassName(), "invalid request")
-                    return
-                }
-                changeCameraEnabledStatus(!cameraDenied)
-                sendCameraStatusChange(!cameraDenied)
+                val request = messageSerializer.deserialize(data, mdmData) ?: return // deseralize
+
+                changeCameraEnabledStatus(!request.isMDMRequested)
+
                 CoroutineScope(Dispatchers.IO).launch {
-                    val rsaKey = getPublicKeyUseCase(mdmData.ip).getOrNull()
-                    if (rsaKey == null) {
-                        // 만약 RSA 퍼블릭키를 못가져온경우 일단 로깅.
-                        // MDM DATA 초기화시 얘도 초기화 안함? -> 그 사이에 서버 껏다 켜져서 퍼블릭키 바뀌면?
-                        Log.e(getClassName(), "Can't retrieve RSA Public Key..")
-                        return@launch
-                    }
-                    val response: String = authId.plus("|")
-                        .plus(System.currentTimeMillis().toString())
-                        .plus("|")
-                        .plus((!checkCameraEnabledUseCase()).toString())
-                    val encryptResponse: String = rsaCrypto.encrypt(response, rsaKey.data)
-                    if (encryptResponse.isEmpty()) {
-                        // 암호화 실패한경우 리턴
-                        Log.e(getClassName(), "Can't encrypt response Message..")
-                        return@launch
-                    }
-                    webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.RESPONSE, encryptResponse))
+                    val rsaKey = getRSAPublicKey() ?: return@launch
+                    val mdmMessage = MDMMessage(mdmData.authID, System.currentTimeMillis(), !checkCameraEnabledUseCase()) //결과 응답 데이터
+                    val serialize = messageSerializer.serialize(mdmMessage, rsaKey) ?: return@launch // 직렬화 성공시 not null
+                    webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.RESPONSE, serialize))
                 }
             }
 
@@ -197,10 +173,21 @@ class MdmService : Service(), WebSocketCallback {
         }
     }
 
-    private fun checkTimeValid(time: Long): Boolean {
-        // 2초보다 작은 경우 올바른 응답
-        return (System.currentTimeMillis() - time) <= (TIMEOUT * 2000)
+    /**
+     * RSA 공개키 가져오는 메소드
+     * @return 실패시 null 성공시 publicKey
+     */
+    private suspend fun getRSAPublicKey() : String? {
+        val rsaKey = getPublicKeyUseCase(mdmData.ip).getOrNull()
+        if (rsaKey == null) {
+            // 만약 RSA 퍼블릭키를 못가져온경우 일단 로깅.
+            // MDM DATA 초기화시 얘도 초기화 안함? -> 그 사이에 서버 껏다 켜져서 퍼블릭키 바뀌면?
+            Log.e(getClassName(), "Can't retrieve RSA Public Key..")
+            return null
+        }
+        return rsaKey.data
     }
+
 
     // 서비스 종료
     private fun stopService() {
@@ -213,8 +200,8 @@ class MdmService : Service(), WebSocketCallback {
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
         startService()
+        super.onStartCommand(intent, flags, startId)
         return START_STICKY //다시 시작, 인텐트 null
     }
 
@@ -234,10 +221,12 @@ class MdmService : Service(), WebSocketCallback {
             enableCameraUseCase()
         else // 비허용
             disableCameraUseCase()
-        mdmData.isEnabled = enabled
+
+        mdmData.isEnabled = !enabled
         CoroutineScope(Dispatchers.IO).launch {
             saveMDMDataUseCase(mdmData)
         }
+        sendCameraStatusChange(enabled)
     }
 
     // 카메라 잠금여부 변환 알려줌
@@ -255,21 +244,25 @@ class MdmService : Service(), WebSocketCallback {
         // 서버 오픈 알림
         Log.i(getClassName(), "Socket Opened")
         sendServerStatusChange(true)
+
         CoroutineScope(Dispatchers.IO).launch {
             // 웹소켓 연결시 hand shake 시행
-            val rsaKey = getPublicKeyUseCase(mdmData.ip).getOrNull()
-            if (rsaKey == null) {
-                Log.e(getClassName(), "Can't retrieve rsa key")
-                return@launch
-            }
-            webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.HAND_SHAKE, rsaCrypto.encrypt(mdmData.uuid.toString(), rsaKey.data)))
+            val rsaKey = getRSAPublicKey() ?: return@launch // rsa키 못가져올경우 return
+            webSocketSendMessageUseCase(WebSocketMessage(WebSocketStatus.HAND_SHAKE, rsaCrypto.encrypt(mdmData.uuid.toString(), rsaKey)))
         }
 
     }
 
-    override fun onClose(reason: String) {
-        // 서버 닫힘 알림
+    override fun onClose() {
+        // 서버 연결, 타임아웃도 Failure에서 호출됨. -> onClose로 핸들링하기
         sendServerStatusChange(false)
+        // retry logic
+        CoroutineScope(Dispatchers.IO).launch {
+            delay(RETRY_TIME)
+            // 연결되어 있지 않을경우 재연결 시도
+            if (!webSocketCheckConnectionUseCase())
+                webSocketConnectUseCase(mdmData.ip, this@MdmService)
+        }
     }
 
 

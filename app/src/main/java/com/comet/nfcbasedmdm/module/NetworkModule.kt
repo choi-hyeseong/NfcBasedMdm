@@ -1,7 +1,10 @@
 package com.comet.nfcbasedmdm.module
 
+import com.comet.nfcbasedmdm.common.cipher.AESCrypto
+import com.comet.nfcbasedmdm.common.cipher.RSACrypto
 import com.comet.nfcbasedmdm.mdm.auth.api.AuthAPI
 import com.comet.nfcbasedmdm.mdm.connection.key.api.PublicKeyAPI
+import com.comet.nfcbasedmdm.service.serialize.MessageSerializer
 import com.google.gson.Gson
 import com.skydoves.sandwich.retrofit.adapters.ApiResponseCallAdapterFactory
 import dagger.Module
@@ -28,6 +31,7 @@ class NetworkModule {
         return OkHttpClient.Builder()
             .connectTimeout(TIMEOUT, TimeUnit.SECONDS)
             .readTimeout(TIMEOUT, TimeUnit.SECONDS)
+            .pingInterval(TIMEOUT, TimeUnit.SECONDS) //for ping-pong interval
             .build()
     }
 
@@ -39,6 +43,12 @@ class NetworkModule {
             .addCallAdapterFactory(ApiResponseCallAdapterFactory.create())
             .addConverterFactory(GsonConverterFactory.create(Gson()))
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMessageSerializer(rsaCrypto: RSACrypto, aesCrypto: AESCrypto) : MessageSerializer {
+        return MessageSerializer(aesCrypto, rsaCrypto)
     }
 
     @Provides
