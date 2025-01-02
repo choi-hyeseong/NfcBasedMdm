@@ -157,7 +157,6 @@ class MdmService : Service(), WebSocketCallback {
             WebSocketStatus.EXECUTE_MDM -> {
                 //MDM 요청
                 val request = messageSerializer.deserialize(data, mdmData) ?: return // deseralize
-
                 changeCameraEnabledStatus(!request.isMDMRequested)
 
                 CoroutineScope(Dispatchers.IO).launch {
