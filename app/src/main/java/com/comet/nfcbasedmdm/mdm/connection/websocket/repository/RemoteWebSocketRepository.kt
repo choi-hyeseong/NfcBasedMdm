@@ -16,22 +16,22 @@ class RemoteWebSocketRepository(private val okHttpClient: OkHttpClient) : Websoc
     private var webSocket: WebSocket? = null
     private val gson = Gson()
 
-    override suspend fun connect(url: String, callback: WebSocketCallback) {
-        val request = Request.Builder().url("ws://$url/mdm").build()
+    override suspend fun connect(baseUrl: String, callback: WebSocketCallback) {
+        val request = Request.Builder().url("ws://$baseUrl/mdm").build()
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                Log.i(getClassName(), "Websocket open")
                 callback.onOpen()
             }
 
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                callback.onClose(reason)
+            // 서버에서 close를 해도 onFailure에서 핸들링됨.
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                super.onFailure(webSocket, t, response)
+                Log.e(this@RemoteWebSocketRepository.getClassName(), "onFailure")
+                callback.onClose() // 따라서 callback의 onClose를 여기서 핸들링
                 this@RemoteWebSocketRepository.webSocket = null
             }
 
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                super.onFailure(webSocket, t, response)
-                Log.e(getClassName(), response?.message ?: "", t)
-            }
 
             // 웨 string이면서 byteString이라....
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -47,6 +47,7 @@ class RemoteWebSocketRepository(private val okHttpClient: OkHttpClient) : Websoc
     }
 
     override suspend fun disconnect() {
+        webSocket?.cancel()
         webSocket = null
     }
 

@@ -9,7 +9,7 @@ import com.comet.nfcbasedmdm.mdm.connection.websocket.repository.WebsocketReposi
  */
 class WebSocketConnectUseCase(private val websocketRepository: WebsocketRepository) {
 
-    suspend operator fun invoke(url : String, callback : WebSocketCallback) {
-        websocketRepository.connect(url, callback)
+    suspend operator fun invoke(baseUrl : String, callback : WebSocketCallback) {
+        websocketRepository.connect(baseUrl, callback)
     }
 }

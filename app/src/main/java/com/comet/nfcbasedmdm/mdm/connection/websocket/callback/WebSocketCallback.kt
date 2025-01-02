@@ -9,8 +9,7 @@ interface WebSocketCallback {
 
     fun onOpen()
 
-    // 서버에 의해서 종료될때만 호출됨. 사용자가 disconnect 메소드로 호출한경우 작동 X
-    fun onClose(reason : String)
-
     fun onMessage(message : WebSocketMessage)
+
+    fun onClose()
 }
