@@ -30,8 +30,7 @@ class MessageSerializer(private val aesCrypto: AESCrypto, private val rsaCrypto:
             Log.w(getClassName(), "can't execute mdm")
             return null
         }
-
-        val split = message.split("|")
+        val split = decrypt.split("|")
         if (split.size != 3) {
             Log.w(getClassName(), "invalid mdm data")
             return null
@@ -57,7 +56,7 @@ class MessageSerializer(private val aesCrypto: AESCrypto, private val rsaCrypto:
         val response: String = mdmMessage.authID.plus("|")
             .plus(System.currentTimeMillis().toString())
             .plus("|")
-            .plus((!mdmMessage.isMDMRequested).toString())
+            .plus((mdmMessage.isMDMRequested).toString())
         val encryptResponse: String = rsaCrypto.encrypt(response, publicKey)
         if (encryptResponse.isEmpty()) {
             // 암호화 실패한경우 리턴
