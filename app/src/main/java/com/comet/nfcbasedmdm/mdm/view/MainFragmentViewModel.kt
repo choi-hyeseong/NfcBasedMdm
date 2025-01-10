@@ -7,6 +7,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -21,7 +23,7 @@ class MainFragmentViewModel @Inject constructor(private val getMDMDataUseCase: G
     // mdm 상태를 담는 LiveData
     val mdmStatusLiveData : MutableLiveData<Boolean> by lazy {
         // lazy하게 가져오면서 로드시 mdm 정보 로드까지.
-        MutableLiveData<Boolean>().also { loadInitialMdmStatus() }
+        MutableLiveData<Boolean>().apply { value = loadInitialMdmStatus() }
     }
 
     fun updateServerStatus(status : Boolean) {
@@ -32,10 +34,11 @@ class MainFragmentViewModel @Inject constructor(private val getMDMDataUseCase: G
         mdmStatusLiveData.value = status
     }
 
-    private fun loadInitialMdmStatus() {
-        CoroutineScope(Dispatchers.IO).launch {
-            val data = getMDMDataUseCase() ?: return@launch
-            mdmStatusLiveData.postValue(data.isEnabled)
+    private fun loadInitialMdmStatus() : Boolean {
+        return runBlocking {
+            withContext(Dispatchers.IO) {
+                true == getMDMDataUseCase()?.isEnabled
+            }
         }
     }
 }
