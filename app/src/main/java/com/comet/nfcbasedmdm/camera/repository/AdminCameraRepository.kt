@@ -13,18 +13,21 @@ class AdminCameraRepository(private val context : Context) : CameraRepository {
     // 정책 관리에 필요한 policy manager
     private val policy : DevicePolicyManager by lazy { context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager }
     // admin 권한에 사용되는 broadcast receiver
-    private val receiver = ComponentName(context.packageName, "$context.packageName.AdminReceiver")
+    // package name 잘 가져오기
+    private val receiver = ComponentName(context.packageName, "${context.packageName}.AdminReceiver")
 
     override fun isCameraEnabled(): Boolean {
         return !policy.getCameraDisabled(receiver)
     }
 
     override fun enableCamera() {
-        policy.setCameraDisabled(receiver, true)
+        // disabled니까 false로 해야 enable 가능
+        policy.setCameraDisabled(receiver, false)
     }
 
     override fun disableCamera() {
-        policy.setCameraDisabled(receiver, false)
+        // disabled니까 true로 해야지
+        policy.setCameraDisabled(receiver, true)
     }
 
 }
