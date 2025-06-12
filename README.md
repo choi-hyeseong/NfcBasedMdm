@@ -4,7 +4,10 @@
 ##### 사용된 기술 스택 :
 <img src="https://img.shields.io/badge/kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white"> <img src="https://img.shields.io/badge/bootstrap-7952B3?style=for-the-badge&logo=bootstrap&logoColor=white"> <img src="https://img.shields.io/badge/html5-E34F26?style=for-the-badge&logo=html5&logoColor=white"> 
   <img src="https://img.shields.io/badge/javascript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black">  <img src="https://img.shields.io/badge/mysql-4479A1?style=for-the-badge&logo=mysql&logoColor=white">  <img src="https://img.shields.io/badge/spring boot-6DB33F?style=for-the-badge&logo=springboot&logoColor=white"><img src="https://img.shields.io/badge/jquery-0769AD?style=for-the-badge&logo=jquery&logoColor=white">
-   
+
+### 시연 영상
+https://www.youtube.com/watch?v=f51uo-uOrpA
+
 ### 1. 제작 계기
 ##### 여러 안드로이드 애플리케이션 제작을 하던 중, 서버와 애플리케이션간의 의사소통의 필요성 및 안드로이드에서의 응답 처리의 필요성을 느껴 프로젝트를 통해 구현해보게 되었습니다. 여러 기업에서 사내 보안을 관리하기 위해 MDM (Mobile Device Management) 시스템을 구축 하는데, 이때 필요한 사항이 무엇인가를 생각해보고, 이를 최대한 구현해보는 과정이 되었습니다.
 ### Application</br>
